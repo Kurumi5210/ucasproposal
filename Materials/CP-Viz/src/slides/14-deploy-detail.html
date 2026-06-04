@@ -1,0 +1,31 @@
+<!-- Ch5.2: DCP & PCP 部署 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>DCP 部署</strong></h3>
+            <div class="grid" style="margin-bottom:2rem;">
+              <div class="column">
+                <h4>时延</h4>
+                <p>短序列下额外通信会带来一定劣化；长序列（通常 128K 以上）因 KVCache 切分独立计算，<strong>有效降低 TPOT</strong>。</p>
+              </div>
+              <div class="column">
+                <h4>吞吐</h4>
+                <p>资源紧张时通过 DCP 提升 KVCache 容量，可承载更多并发请求，<strong>吞吐显著提升</strong>。</p>
+              </div>
+              <div class="column">
+                <h4>超长序列</h4>
+                <p>开启 DCP 后 KVCache 可用量大幅增长，常见模型可在单机 A3 上推理<strong>超过 1M token</strong> 的超长序列。</p>
+              </div>
+            </div>
+            <hr style="border:0; border-top:1px solid #e2e8f0; margin:1rem 0 1.5rem;">
+            <h3><strong>PCP 部署</strong></h3>
+            <div class="grid">
+              <div class="column">
+                <h4>性能</h4>
+                <p>中长序列（32K～256K）场景下，时延<strong>优于 DP</strong>、略逊于 TP；吞吐<strong>优于 TP</strong>、略逊于 DP，在 DP/TP 之间取得平衡。</p>
+              </div>
+              <div class="column">
+                <h4>适用场景</h4>
+                <p>当请求并发量接近系统最优吞吐时，通过 PCP 进一步降低时延，兼顾吞吐与响应速度。</p>
+              </div>
+            </div>
+          </div></section>

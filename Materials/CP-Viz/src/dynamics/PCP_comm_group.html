@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PCP / TP / DCP Communication Groups</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --muted: #64748b;
+      --line: #1f2937;
+      --panel: #f8fafc;
+      --border: #d7e1ef;
+      --tp: #2563eb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: white;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .page {
+      max-width: 1400px; /* 适当放宽最大页面限制以支撑超大图表 */
+      margin: 0 auto;
+      padding: 12px 16px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 140px 140px 140px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--panel);
+      margin-bottom: 12px;
+    }
+
+    .control {
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+    }
+
+    .control label {
+      font-weight: 700;
+      color: #334155;
+    }
+
+    .control select {
+      height: 28px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: white;
+      padding: 0 8px;
+      font-size: 12px;
+    }
+
+    .status {
+      font-size: 12px;
+      line-height: 1.5;
+      color: #334155;
+      align-self: center;
+    }
+
+    .status b { color: #111827; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: white;
+      padding: 16px;
+    }
+
+    h2 {
+      margin: 0 0 4px;
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 0 0 12px;
+      line-height: 1.35;
+    }
+
+    svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      background: white;
+    }
+
+    .rank-cell {
+      stroke: var(--line);
+      stroke-width: 1.2;
+      rx: 6;
+      ry: 6;
+    }
+
+    /* 再次加粗放大主要的 Rank 核心字体 */
+    .rank-text {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 14px;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      fill: #111827;
+      font-weight: 700;
+    }
+
+    /* 再次加粗放大辅助文本信息字体 */
+    .minor-text {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      fill: #334155;
+    }
+
+    /* 放大了轴向标题 */
+    .axis {
+      font-size: 13.5px;
+      fill: #111827;
+      font-weight: 700;
+    }
+
+    /* 放大了面板主标题 */
+    .group-title {
+      font-size: 14.5px;
+      fill: #111827;
+      font-weight: 700;
+    }
+
+    .tp-border {
+      fill: none;
+      stroke: var(--tp);
+      stroke-width: 1.6;
+      stroke-dasharray: 4 4;
+      rx: 8;
+      ry: 8;
+    }
+
+    .dcp-border {
+      fill: none;
+      stroke: #ef4444;
+      stroke-width: 2.5;
+      rx: 8;
+      ry: 8;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    th, td {
+      border: 1px solid #d7e1ef;
+      padding: 5px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f1f5f9;
+      font-weight: 700;
+    }
+
+    .code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 32px;
+      height: 18px;
+      padding: 0 4px;
+      margin: 1px;
+      border: 1px solid #94a3b8;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+    }
+
+    .note {
+      margin-top: 10px;
+      padding: 8px;
+      border: 1px solid #d7e1ef;
+      border-radius: 6px;
+      background: #f8fafc;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #334155;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      white-space: pre-wrap;
+    }
+
+    .legend-container {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-top: 1px dashed var(--border);
+      font-size: 13px;
+      color: #334155;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 1100px) {
+      .controls { grid-template-columns: 1fr 1fr 1fr; }
+      .status { grid-column: span 3; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="controls">
+      <div class="control">
+        <label for="pcpSize">PCP size</label>
+        <select id="pcpSize">
+          <option value="1">1</option>
+          <option value="2" selected>2</option>
+          <option value="4">4</option>
+        </select>
+      </div>
+      <div class="control">
+        <label for="tpSize">TP size</label>
+        <select id="tpSize">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="4" selected>4</option>
+          <option value="8">8</option>
+        </select>
+      </div>
+      <div class="control">
+        <label for="dcpSize">DCP size</label>
+        <select id="dcpSize"></select>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Rank Layout 与 DCP Group Formation</h2>
+        <p class="sub">rank = pcp_rank × TP + tp_rank；DCP flatten order 按列展开：flat_idx = tp_rank × PCP + pcp_rank。</p>
+        <svg id="layoutSvg" viewBox="0 0 1050 260" role="img" aria-label="rank layout"></svg>
+        
+        <div class="legend-container">
+          <div>💡 <b>网格文本含义：</b>r (全局 rank) | g (DCP 组 ID) : l (DCP 组内局部 rank)</div>
+          <div>🔵 <b>蓝色虚线框：</b>TP 通信组 | 🔴 <b>红色实线框：</b>DCP 通信组</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>通信组</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 28%;">Group</th>
+              <th>Ranks</th>
+            </tr>
+          </thead>
+          <tbody id="groupTable"></tbody>
+        </table>
+        <div class="note" id="formula"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const NS = "http://www.w3.org/2000/svg";
+  const pcpEl = document.getElementById("pcpSize");
+  const tpEl = document.getElementById("tpSize");
+  const dcpEl = document.getElementById("dcpSize");
+  const svg = document.getElementById("layoutSvg");
+
+  const COLORS = [
+    "#fef3c7", "#dbeafe", "#dcfce7", "#f3e8ff",
+    "#ffedd5", "#fee2e2", "#e0f2fe", "#ecfccb",
+    "#ede9fe", "#ccfbf1", "#fce7f3", "#e2e8f0",
+    "#fef9c3", "#cffafe", "#dcfce7", "#fee2e2"
+  ];
+
+  function E(tag, attrs = {}) {
+    const node = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "text") node.textContent = v;
+      else node.setAttribute(k, v);
+    }
+    return node;
+  }
+
+  function clearSvg() {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+  }
+
+  function rankOf(pcp, tp, tpSize) {
+    return pcp * tpSize + tp;
+  }
+
+  function flatIdxOf(pcp, tp, pcpSize) {
+    return tp * pcpSize + pcp;
+  }
+
+  function uniqueDcpOptions(pcpSize, tpSize) {
+    const total = pcpSize * tpSize;
+    const candidates = [1, pcpSize, Math.floor(total / 2), total];
+    return [...new Set(candidates)]
+      .filter(v => v >= 1 && v <= total && total % v === 0)
+      .sort((a, b) => a - b);
+  }
+
+  function updateDcpOptions() {
+    const pcp = Number(pcpEl.value);
+    const tp = Number(tpEl.value);
+    const options = uniqueDcpOptions(pcp, tp);
+    const current = Number(dcpEl.value || options[0]);
+
+    dcpEl.innerHTML = "";
+    for (const v of options) {
+      const opt = document.createElement("option");
+      opt.value = String(v);
+      opt.textContent = String(v);
+      dcpEl.appendChild(opt);
+    }
+
+    dcpEl.value = options.includes(current) ? String(current) : String(options[Math.min(1, options.length - 1)]);
+  }
+
+  function getGroups(pcpSize, tpSize, dcpSize) {
+    const total = pcpSize * tpSize;
+    const dcpGroups = Array.from({ length: total / dcpSize }, () => []);
+    const dcpLocal = new Map();
+
+    for (let tp = 0; tp < tpSize; tp++) {
+      for (let pcp = 0; pcp < pcpSize; pcp++) {
+        const flat = flatIdxOf(pcp, tp, pcpSize);
+        const g = Math.floor(flat / dcpSize);
+        const l = flat % dcpSize;
+        const r = rankOf(pcp, tp, tpSize);
+        dcpGroups[g].push(r);
+        dcpLocal.set(r, l);
+      }
+    }
+
+    const tpGroups = Array.from({ length: pcpSize }, (_, pcp) =>
+      Array.from({ length: tpSize }, (_, tp) => rankOf(pcp, tp, tpSize))
+    );
+
+    const pcpGroups = Array.from({ length: tpSize }, (_, tp) =>
+      Array.from({ length: pcpSize }, (_, pcp) => rankOf(pcp, tp, tpSize))
+    );
+
+    return { tpGroups, dcpGroups, pcpGroups, dcpLocal };
+  }
+
+  function drawLayout(pcpSize, tpSize, dcpSize) {
+    clearSvg();
+
+    const { dcpGroups, dcpLocal } = getGroups(pcpSize, tpSize, dcpSize);
+    const rankToDcpGroup = new Map();
+    dcpGroups.forEach((grp, gi) => grp.forEach(r => rankToDcpGroup.set(r, gi)));
+
+    // 全局物理结构网格（左侧）尺寸基准调整
+    const left = 60;
+    const top = 75;
+    const maxGridW = 390; 
+    const maxGridH = 155; 
+    const gap = 8;        
+    const cellW = Math.min(68, Math.max(40, (maxGridW - (tpSize - 1) * gap) / tpSize)); 
+    const cellH = Math.min(48, Math.max(34, (maxGridH - (pcpSize - 1) * gap) / pcpSize));
+    const gridW = tpSize * cellW + (tpSize - 1) * gap;
+    const gridH = pcpSize * cellH + (pcpSize - 1) * gap;
+
+    // 头部主标题与坐标轴说明
+    svg.appendChild(E("text", {
+      x: left + gridW / 2,
+      y: 20,
+      class: "group-title",
+      "text-anchor": "middle",
+      text: "Physical Rank Grid (Rows: PCP, Cols: TP)"
+    }));
+    svg.appendChild(E("text", { x: left + gridW / 2, y: 46, class: "axis", "text-anchor": "middle", text: "TP rank →" }));
+    
+    // PCP 轴文本偏置调整
+    svg.appendChild(E("text", {
+      x: 16, y: top + gridH / 2,
+      class: "axis",
+      "text-anchor": "middle",
+      transform: `rotate(-90 16 ${top + gridH / 2})`,
+      text: "PCP rank ←"
+    }));
+
+    for (let tp = 0; tp < tpSize; tp++) {
+      svg.appendChild(E("text", {
+        x: left + tp * (cellW + gap) + cellW / 2,
+        y: top - 10,
+        class: "minor-text",
+        text: `tp${tp}`
+      }));
+    }
+
+    for (let pcp = 0; pcp < pcpSize; pcp++) {
+      svg.appendChild(E("text", {
+        x: left - 22,
+        y: top + pcp * (cellH + gap) + cellH / 2,
+        class: "minor-text",
+        text: `pcp${pcp}`
+      }));
+    }
+
+    for (let pcp = 0; pcp < pcpSize; pcp++) {
+      const y = top + pcp * (cellH + gap);
+      svg.appendChild(E("rect", {
+        x: left - 5,
+        y: y - 5,
+        width: gridW + 10,
+        height: cellH + 10,
+        class: "tp-border"
+      }));
+
+      for (let tp = 0; tp < tpSize; tp++) {
+        const r = rankOf(pcp, tp, tpSize);
+        const dcpG = rankToDcpGroup.get(r);
+        const local = dcpLocal.get(r);
+        const x = left + tp * (cellW + gap);
+
+        svg.appendChild(E("rect", {
+          x, y,
+          width: cellW,
+          height: cellH,
+          fill: COLORS[dcpG % COLORS.length],
+          class: "rank-cell"
+        }));
+        svg.appendChild(E("text", {
+          x: x + cellW / 2,
+          y: y + cellH * 0.38,
+          class: "rank-text",
+          text: `r${r}`
+        }));
+        svg.appendChild(E("text", {
+          x: x + cellW / 2,
+          y: y + cellH * 0.74,
+          class: "minor-text",
+          text: `g${dcpG}:l${local}`
+        }));
+      }
+    }
+
+    // 🔥 核心修改：右侧拉平面板完全拉伸对齐左侧物理结构大尺寸！
+    // 强制设置一个安全的右侧面板绝对偏移起点
+    const sideX = Math.max(left + gridW + 80, 560); 
+    const orderTop = 75;
+    
+    // 强制让右侧的单元格大小（miniW, miniH）等比例完全等于左侧的大单元格（cellW, cellH）
+    const miniW = cellW;
+    const miniH = cellH;
+    const miniGap = gap;
+
+    // 动态居中计算 DCP Flatten Order 的标题栏横坐标
+    svg.appendChild(E("text", { 
+      x: sideX + (tpSize * miniW + (tpSize - 1) * miniGap) / 2, 
+      y: 20, 
+      class: "group-title", 
+      "text-anchor": "middle",
+      text: "DCP Flatten Order" 
+    }));
+    svg.appendChild(E("text", { 
+      x: sideX + (tpSize * miniW + (tpSize - 1) * miniGap) / 2, 
+      y: 46, 
+      class: "axis", 
+      "text-anchor": "middle",
+      text: "TP rank →" 
+    }));
+
+    const order = [];
+    for (let tp = 0; tp < tpSize; tp++) {
+      for (let pcp = 0; pcp < pcpSize; pcp++) {
+        order.push({ pcp, tp, r: rankOf(pcp, tp, tpSize), flat: flatIdxOf(pcp, tp, pcpSize) });
+      }
+    }
+
+    for (let tp = 0; tp < tpSize; tp++) {
+      svg.appendChild(E("text", {
+        x: sideX + tp * (miniW + miniGap) + miniW / 2,
+        y: orderTop - 10,
+        class: "minor-text",
+        text: `tp${tp}`
+      }));
+    }
+
+    for (const item of order) {
+      const col = item.tp;
+      const row = item.pcp;
+      const x = sideX + col * (miniW + miniGap);
+      const y = orderTop + row * (miniH + miniGap);
+      const dcpG = Math.floor(item.flat / dcpSize);
+      const local = item.flat % dcpSize;
+
+      svg.appendChild(E("rect", {
+        x, y,
+        width: miniW,
+        height: miniH,
+        fill: COLORS[dcpG % COLORS.length],
+        class: "rank-cell"
+      }));
+      svg.appendChild(E("text", {
+        x: x + miniW / 2,
+        y: y + miniH * 0.38,
+        class: "rank-text",
+        text: `r${item.r}`
+      }));
+      svg.appendChild(E("text", {
+        x: x + miniW / 2,
+        y: y + miniH * 0.74,
+        class: "minor-text",
+        text: `g${dcpG}:l${local}`
+      }));
+    }
+
+    // 重新高精度绘制超大规模的 DCP 组包裹红框线
+    dcpGroups.forEach((grp, gi) => {
+      const flats = [];
+      for (let tp = 0; tp < tpSize; tp++) {
+        for (let pcp = 0; pcp < pcpSize; pcp++) {
+          const flat = flatIdxOf(pcp, tp, pcpSize);
+          if (Math.floor(flat / dcpSize) === gi) flats.push({tp, pcp});
+        }
+      }
+      const minTp = Math.min(...flats.map(v => v.tp));
+      const maxTp = Math.max(...flats.map(v => v.tp));
+      const minPcp = Math.min(...flats.map(v => v.pcp));
+      const maxPcp = Math.max(...flats.map(v => v.pcp));
+      
+      svg.appendChild(E("rect", {
+        x: sideX + minTp * (miniW + miniGap) - 3,
+        y: orderTop + minPcp * (miniH + miniGap) - 3,
+        width: (maxTp - minTp + 1) * miniW + (maxTp - minTp) * miniGap + 6,
+        height: (maxPcp - minPcp + 1) * miniH + (maxPcp - minPcp) * miniGap + 6,
+        class: "dcp-border"
+      }));
+    });
+  }
+
+  function pill(rank, groupIndex = null) {
+    const bg = groupIndex === null ? "#ffffff" : COLORS[groupIndex % COLORS.length];
+    return `<span class="pill" style="background:${bg}">r${rank}</span>`;
+  }
+
+  function renderTables(pcpSize, tpSize, dcpSize) {
+    const { tpGroups, dcpGroups, pcpGroups } = getGroups(pcpSize, tpSize, dcpSize);
+    const rows = [];
+
+    tpGroups.forEach((grp, i) => {
+      rows.push('<tr><td class="code">TP group (pcp' + i + ')</td><td>' + grp.map(r => pill(r)).join("") + '</td></tr>');
+    });
+    pcpGroups.forEach((grp, i) => {
+      rows.push('<tr><td class="code">PCP group (tp' + i + ')</td><td>' + grp.map(r => pill(r)).join("") + '</td></tr>');
+    });
+    dcpGroups.forEach((grp, i) => {
+      rows.push('<tr><td class="code">DCP group ' + i + '</td><td>' + grp.map(r => pill(r, i)).join("") + '</td></tr>');
+    });
+
+    document.getElementById("groupTable").innerHTML = rows.join("");
+
+    const total = pcpSize * tpSize;
+    document.getElementById("formula").textContent =
+`rank        = pcp_rank * TP + tp_rank
+flat_idx    = tp_rank * PCP + pcp_rank
+dcp_group   = floor(flat_idx / DCP)
+dcp_local   = flat_idx % DCP
+total_ranks = PCP * TP = ${total}`;
+  }
+
+  function render() {
+    updateDcpOptions();
+
+    const pcp = Number(pcpEl.value);
+    const tp = Number(tpEl.value);
+    const dcp = Number(dcpEl.value);
+    const total = pcp * tp;
+    const options = uniqueDcpOptions(pcp, tp);
+
+    document.getElementById("status").innerHTML =
+      `<b>Total Ranks</b> = ${total}; <b>DCP Groups</b> = ${total / dcp}; ` +
+      `<b>DCP Options</b>: [${options.join(", ")}].<br/>` +
+      `颜色代表 DCP 组，蓝色虚线框代表 TP 组。PCP 组由相同 TP rank 跨 PCP 分片组合而成。`;
+
+    drawLayout(pcp, tp, dcp);
+    renderTables(pcp, tp, dcp);
+  }
+
+  [pcpEl, tpEl].forEach(el => {
+    el.addEventListener("change", render);
+  });
+  dcpEl.addEventListener("change", render);
+
+  updateDcpOptions();
+  render();
+</script>
+</body>
+</html>

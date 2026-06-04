@@ -21,7 +21,7 @@
 %---------------------------------------------------------------------------%
 %->> Document settings
 %---------------------------------------------------------------------------%
-\usepackage[authoryear,list,xhf]{Style/artratex}% document settings
+\usepackage[authoryear,xhf]{Style/artratex}% document settings
 %- usage: \usepackage[option1,option2,...,optionN]{artratex}
 %- Multiple optional arguments:
 %- [bibtex|biber]% set bibliography processor and package
@@ -40,7 +40,14 @@
 %- [list]% provide enhanced list environments for algorithm and coding
 %- [math]% enable some extra math packages
 %- [xlink]% disable link colors
-\usepackage{Style/artracom}% user defined commands
+%\usepackage{Style/artracom}% user defined commands
+\setCJKmainfont{AR PL UMing CN}[AutoFakeBold=2.5,ItalicFont=AR PL KaitiM GB]%
+\setCJKsansfont{WenQuanYi Zen Hei}[AutoFakeBold=2.5]%
+\setCJKmonofont{WenQuanYi Zen Hei Mono}[AutoFakeBold=2.5]%
+\setCJKfamilyfont{zhsong}{AR PL UMing CN}[AutoFakeBold=2.5]%
+\setCJKfamilyfont{zhhei}{WenQuanYi Zen Hei}[AutoFakeBold=2.5]%
+\setCJKfamilyfont{zhfs}{AR PL UMing CN}[AutoFakeBold=2.5]%
+\setCJKfamilyfont{zhkai}{AR PL KaitiM GB}[AutoFakeBold=2.5]%
 %---------------------------------------------------------------------------%
 %->> Document inclusion
 %---------------------------------------------------------------------------%
@@ -74,4 +81,3 @@
 }
 \end{document}
 %---------------------------------------------------------------------------%
-

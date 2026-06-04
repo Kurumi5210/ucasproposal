@@ -1,0 +1,26 @@
+
+    </div>
+
+    <!-- Back button (shared by all branch slides, positioned fixed top-right) -->
+    <button class="btn-back" onclick="backFromBranch()" style="display:none;" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+      返回
+    </button>
+
+    <!-- Lightbox overlay -->
+    <div id="lightbox" onclick="closeLightbox()" aria-hidden="true">
+      <button class="lb-close" onclick="closeLightbox()" type="button" aria-label="关闭图片预览">&times;</button>
+      <img id="lightbox-img" src="" alt="">
+    </div>
+
+    <!-- Required -->
+    <script src="static/js/webslides.js"></script>
+    <script src="static/js/presentation.js"></script>
+
+    <!-- OPTIONAL - svg-icons.js (fontastic.me - Font Awesome as svg icons) -->
+    <script defer src="static/js/svg-icons.js"></script>
+
+  </body>
+</html>

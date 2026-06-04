@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PCP Prefill Token Split Visualizer</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #f8fbff;
+      --border: #d7e1ef;
+      --text: #111827;
+      --muted: #64748b;
+      --blue: #2563eb;
+      --blue2: #dbeafe;
+      --green: #059669;
+      --green2: #dcfce7;
+      --red: #dc2626;
+      --red2: #fee2e2;
+      --purple: #7c3aed;
+      --purple2: #ede9fe;
+      --pad-bg: #e5e7eb;
+      --pad-text: #64748b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .page {
+      max-width: 1460px;
+      margin: 0 auto;
+      padding: 12px 14px 18px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 160px 220px 220px 1fr;
+      gap: 10px;
+      align-items: end;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel);
+    }
+
+    .control {
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+    }
+
+    .control label {
+      font-weight: 700;
+      color: #334155;
+    }
+
+    .control select,
+    .control input[type="range"] {
+      width: 100%;
+    }
+
+    .value {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .summary {
+      font-size: 12px;
+      line-height: 1.5;
+      color: #334155;
+    }
+
+    .summary b {
+      color: var(--text);
+    }
+
+    .section {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #ffffff;
+      padding: 10px 12px 12px;
+      margin-bottom: 10px;
+    }
+
+    .section h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      line-height: 1.2;
+      color: var(--blue);
+    }
+
+    .req-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .req-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fafcff;
+      padding: 10px 12px;
+    }
+
+    .req-layout {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.8fr) minmax(760px, 1.6fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .row-block {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 10px 12px;
+    }
+
+    .row-title {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: #475569;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .rank-grid {
+      display: grid;
+      grid-template-columns: repeat(var(--pcp-size, 2), minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .rank-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 6px 7px;
+    }
+
+    .rank-title {
+      margin: 0 0 6px;
+      font-size: 11px;
+      color: #475569;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .chip {
+      min-width: 44px;
+      height: 24px;
+      padding: 0 6px;
+      border-radius: 5px;
+      border: 1px solid #9cbcf7;
+      background: #eef5ff;
+      color: #34507d;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .chip.p0 {
+      background: #eef5ff;
+      border-color: #9cbcf7;
+      color: #3b5a8a;
+    }
+
+    .chip.p1 {
+      background: #f1efff;
+      border-color: #b8a5f2;
+      color: #5b42a8;
+    }
+
+    .chip.selected {
+      background: #cfe0ff;
+      border-color: #7aa7ff;
+      color: #1d4ed8;
+      font-weight: 700;
+    }
+
+    .chip.p1.selected {
+      background: #ded6ff;
+      border-color: #a99af0;
+      color: #5b42a8;
+    }
+
+    .chip.pad {
+      background: var(--pad-bg);
+      border-color: #cbd5e1;
+      color: var(--pad-text);
+    }
+
+    .chip.sep {
+      background: #ffffff;
+      border-color: #94a3b8;
+      color: #475569;
+      min-width: 18px;
+      padding: 0 6px;
+    }
+
+    .meta {
+      margin-top: 8px;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .rank-summary {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+
+    @media (max-width: 1050px) {
+      .controls,
+      .req-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="controls">
+      <div class="control">
+        <label for="pcpSize">PCP size</label>
+        <select id="pcpSize">
+          <option value="2" selected>2</option>
+          <option value="4">4</option>
+        </select>
+        <div class="value">支持 2 / 4</div>
+      </div>
+
+      <div class="control">
+        <label for="len0">Prefill request P0 length</label>
+        <input id="len0" type="range" min="1" max="8" value="8" />
+        <div class="value">当前：<span id="len0Val">18</span></div>
+      </div>
+
+      <div class="control">
+        <label for="len1">Prefill request P1 length</label>
+        <input id="len1" type="range" min="1" max="8" value="8" />
+        <div class="value">当前：<span id="len1Val">11</span></div>
+      </div>
+
+      <div class="summary" id="summary"></div>
+    </div>
+
+    <div class="section">
+      <h2>PCP 切分后各 rank 的 prefill token</h2>
+      <div class="req-grid" id="requestGrid"></div>
+    </div>
+
+    <div class="section">
+      <h2>各 PCP rank 上拼接后的 token</h2>
+      <div class="rank-summary" id="rankSummary"></div>
+    </div>
+  </div>
+
+  <script>
+    const pcpEl = document.getElementById("pcpSize");
+    const len0El = document.getElementById("len0");
+    const len1El = document.getElementById("len1");
+    const requestGridEl = document.getElementById("requestGrid");
+    const rankSummaryEl = document.getElementById("rankSummary");
+    const summaryEl = document.getElementById("summary");
+
+    function chip(text, cls = "") {
+      return `<span class="chip ${cls}">${text}</span>`;
+    }
+
+    function buildTokens(prefix, len) {
+      return Array.from({ length: len }, (_, i) => `${prefix}:${i}`);
+    }
+
+    function splitByPcp(prefix, len, pcpSize) {
+      const original = buildTokens(prefix, len);
+      const chunkCount = 2 * pcpSize;
+      const chunkSize = Math.max(1, Math.ceil(len / chunkCount));
+      const paddedLen = chunkSize * chunkCount;
+
+      const padded = [];
+      for (let i = 0; i < paddedLen; i++) {
+        padded.push(i < len ? `${prefix}:${i}` : "PAD");
+      }
+
+      const chunks = [];
+      for (let c = 0; c < chunkCount; c++) {
+        const start = c * chunkSize;
+        chunks.push(padded.slice(start, start + chunkSize));
+      }
+
+      const rankRows = [];
+      for (let r = 0; r < pcpSize; r++) {
+        const headChunk = chunks[r];
+        const tailChunk = chunks[chunkCount - 1 - r];
+        rankRows.push({
+          rank: r,
+          leftChunk: r,
+          rightChunk: chunkCount - 1 - r,
+          tokens: [...headChunk, ...tailChunk],
+        });
+      }
+
+      return {
+        prefix,
+        len,
+        chunkCount,
+        chunkSize,
+        paddedLen,
+        padded,
+        chunks,
+        rankRows,
+      };
+    }
+
+    function renderTokenRow(tokens, prefix) {
+      return tokens.map(t => {
+        if (t === "PAD") return chip("PAD", "pad");
+        return chip(t, prefix.toLowerCase());
+      }).join("");
+    }
+
+    function renderRankTokenRow(tokens, prefix, leftChunkSize) {
+      return tokens.map((t, idx) => {
+        let cls = prefix.toLowerCase();
+        if (t === "PAD") cls = "pad";
+        else if (idx >= leftChunkSize) cls += " selected";
+        return chip(t === "PAD" ? "PAD" : t, cls);
+      }).join("");
+    }
+
+    function renderRequestCard(data) {
+      const headTailCards = data.rankRows.map(row => `
+        <div class="rank-card">
+          <div class="rank-title">pcp rank ${row.rank} · ${row.tokens.length} tokens</div>
+          <div class="chip-row">${renderRankTokenRow(row.tokens, data.prefix, data.chunkSize)}</div>
+        </div>
+      `).join("");
+
+      return `
+        <div class="req-card" style="--pcp-size: ${Number(document.getElementById("pcpSize").value)};">
+          <div class="req-layout">
+            <div class="row-block">
+              <div class="row-title">${data.prefix} padded to ${data.paddedLen}</div>
+              <div class="chip-row">${renderTokenRow(data.padded, data.prefix)}</div>
+            </div>
+            <div class="rank-grid">${headTailCards}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderRankSummary(allReqs, pcpSize) {
+      const cards = [];
+      for (let r = 0; r < pcpSize; r++) {
+        const pieces = [];
+        for (let i = 0; i < allReqs.length; i++) {
+          const req = allReqs[i];
+          const row = req.rankRows[r];
+          row.tokens.forEach((t, idx) => {
+            let cls = req.prefix.toLowerCase();
+            if (t === "PAD") cls = "pad";
+            else if (idx >= req.chunkSize) cls += " selected";
+            pieces.push(chip(t === "PAD" ? "PAD" : t, cls));
+          });
+          if (i !== allReqs.length - 1) {
+            pieces.push(chip("|", "sep"));
+          }
+        }
+
+        cards.push(`
+          <div class="rank-card">
+            <div class="rank-title">pcp rank ${r}</div>
+            <div class="chip-row">${pieces.join("")}</div>
+          </div>
+        `);
+      }
+      return cards.join("");
+    }
+
+    function render() {
+      const pcpSize = Number(pcpEl.value);
+      const len0 = Number(len0El.value);
+      const len1 = Number(len1El.value);
+
+      document.getElementById("len0Val").textContent = len0;
+      document.getElementById("len1Val").textContent = len1;
+
+      const req0 = splitByPcp("P0", len0, pcpSize);
+      const req1 = splitByPcp("P1", len1, pcpSize);
+
+      requestGridEl.innerHTML = renderRequestCard(req0) + renderRequestCard(req1);
+      rankSummaryEl.innerHTML = renderRankSummary([req0, req1], pcpSize);
+
+    }
+
+    [pcpEl, len0El, len1El].forEach(el => {
+      el.addEventListener("input", render);
+      el.addEventListener("change", render);
+    });
+
+    render();
+  </script>
+</body>
+</html>

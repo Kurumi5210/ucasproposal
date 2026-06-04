@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="zh-CN" prefix="og: http://ogp.me/ns#">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- SEO -->
+    <title>vLLM PCP&DCP 技术分享</title>
+    <meta name="description" content="vLLM PCP&DCP 技术分享演示">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css?family=Roboto:100,100i,300,300i,400,400i,700,700i%7CMaitree:200,300,400,600,700&amp;subset=latin-ext" rel="stylesheet">
+
+    <!-- Mermaid -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:false, theme:'default', securityLevel:'loose', fontSize:20, flowchart:{useMaxWidth:true, htmlLabels:true}});</script>
+
+    <!-- CSS WebSlides -->
+    <link rel="stylesheet" type='text/css' media='all' href="static/css/webslides.css">
+
+    <!-- CSS Presentation -->
+    <link rel="stylesheet" type='text/css' media='all' href="static/css/presentation.css">
+
+    <!-- Optional - CSS SVG Icons (Font Awesome) -->
+    <link rel="stylesheet" type='text/css' media='all' href="static/css/svg-icons.css">
+
+    <!-- FAVICONS -->
+    <link rel="shortcut icon" sizes="16x16" href="static/images/favicons/favicon.png">
+    <link rel="shortcut icon" sizes="32x32" href="static/images/favicons/favicon-32.png">
+    <link rel="apple-touch-icon icon" sizes="76x76" href="static/images/favicons/favicon-76.png">
+    <link rel="apple-touch-icon icon" sizes="120x120" href="static/images/favicons/favicon-120.png">
+    <link rel="apple-touch-icon icon" sizes="152x152" href="static/images/favicons/favicon-152.png">
+    <link rel="apple-touch-icon icon" sizes="180x180" href="static/images/favicons/favicon-180.png">
+    <link rel="apple-touch-icon icon" sizes="192x192" href="static/images/favicons/favicon-192.png">
+
+    <!-- Android -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#333333">
+</head>
+
+<body>
+    <!-- Fixed logo: always visible, independent of WebSlides auto-hide header -->
+    <div class="fixed-logo">
+      <img src="static/images/logos/vllm-ascend.webp" alt="vLLM Ascend">
+    </div>
+
+    <main role="main">
+      <article id="webslides" class="vertical">
+        <!-- Quick Guide
+          - Each parent <section> in the <article id="webslides"> element is an individual slide.
+          - Vertical sliding = <article id="webslides" class="vertical">
+          - <div class="wrap"> = container 90% / <div class="wrap size-50"> = 45%;
+        -->
+
+        <!-- ========== SLIDES START ========== -->
+<section class="aligncenter">
+          <div class="wrap">
+            <h1><strong>vLLM DCP &amp; PCP 技术分享</strong></h1>
+            <p class="text-intro">
+              分享人：邱纯硕<br>
+              vLLM PCP 特性核心贡献者 @华为昇腾
+            </p>
+            <p class="text-symbols">2026.05.30</p>
+          </div></section>
+<section class="aligncenter">
+          <div class="wrap size-60 toc-wrap">
+            <h2><strong>目录</strong></h2>
+            <div class="toc-container">
+              <ol class="toc-items">
+                <li class="toc-item" onclick="window.ws.goToSlide(2)">
+                  <span class="toc-num">01</span>
+                  <span class="toc-title">CP 特性总览</span>
+                </li>
+                <li class="toc-item" onclick="window.ws.goToSlide(3)">
+                  <span class="toc-num">02</span>
+                  <span class="toc-title">vLLM DCP 特性</span>
+                </li>
+                <li class="toc-item" onclick="window.ws.goToSlide(7)">
+                  <span class="toc-num">03</span>
+                  <span class="toc-title">vLLM PCP 特性</span>
+                </li>
+                <li class="toc-item" onclick="window.ws.goToSlide(13)">
+                  <span class="toc-num">04</span>
+                  <span class="toc-title">部署场景</span>
+                </li>
+                <li class="toc-item" onclick="window.ws.goToSlide(15)">
+                  <span class="toc-num">05</span>
+                  <span class="toc-title">CP 特性优化与拓展</span>
+                </li>
+              </ol>
+            </div>
+          </div></section>
+
+<!-- Ch1: CP 特性总览 -->
+        <section>
+          <div class="wrap">
+            <h2><strong>CP 特性总览</strong></h2>
+            <p class="text-intro" style="margin-bottom:2rem;">
+              <strong>tl;dr</strong> &mdash; PCP 对 prefill 的输入序列进行切分，降低 TTFT；DCP 对 KVCache 进行序列切分，消除冗余存储，提升最大长度与吞吐。
+            </p>
+            <div class="img-zoom-wrap">
+              <img src="static/images/CP/overview.svg" alt="CP Overview" style="width:100%; max-height:62vh; object-fit:contain;">
+              <button class="img-zoom-btn" onclick="event.stopPropagation();openLightbox(this.parentElement.querySelector('img').src)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+            </div>
+          </div></section>
+<!-- Ch2: vLLM DCP 特性 (section header) -->
+        <section class="aligncenter">
+          <div class="wrap">
+            <h2><strong>vLLM DCP 特性</strong></h2>
+            <p style="margin-top:1rem; font-size:1.5rem; color:#64748b;">
+              PR &mdash; <a href="https://github.com/vllm-project/vllm/pull/23734" target="_blank">vllm#23734</a>
+              &nbsp;&middot;&nbsp; <a href="https://github.com/youzhedian" target="_blank">@youzhedian</a> (ChaoHong @月之暗面)
+            </p>
+          </div></section>
+<!-- Ch2.1: DCP Prefill 方案 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>DCP Prefill 方案</strong></h3>
+            <div class="img-zoom-wrap">
+              <img src="static/images/CP/DCP-prefill-nochunkedprefill.svg" alt="DCP Prefill" style="width:100%; max-height:62vh; object-fit:contain;">
+              <button class="img-zoom-btn" onclick="event.stopPropagation();openLightbox(this.parentElement.querySelector('img').src)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+            </div>
+            <p style="text-align:right; margin-top:1.5rem;">
+              <button class="btn-branch" onclick="jumpToBranch('branch-dcp-detail')">
+                查看 BlockTable &amp; Slot Mapping 细节 &#10132;
+              </button>
+            </p>
+          </div></section>
+<!-- Ch2.3: DCP Decode 方案 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>DCP Decode 方案</strong></h3>
+            <div class="img-zoom-wrap">
+              <img src="static/images/CP/DCP-decode.svg" alt="DCP Decode" style="width:100%; max-height:62vh; object-fit:contain;">
+              <button class="img-zoom-btn" onclick="event.stopPropagation();openLightbox(this.parentElement.querySelector('img').src)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+            </div>
+          </div></section>
+<!-- Ch2.4: DCP ChunkedPrefill 方案 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>DCP ChunkedPrefill 方案</strong></h3>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+              <div>
+                <p style="text-align:center; font-weight:600; margin-bottom:0.5rem;">MLA 路径</p>
+                <div class="img-zoom-wrap">
+                  <img src="static/images/CP/DCP-prefill-MLA.svg" alt="DCP MLA" style="width:100%; max-height:46vh; object-fit:contain;">
+                  <button class="img-zoom-btn" onclick="event.stopPropagation();openLightbox(this.parentElement.querySelector('img').src)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+                </div>
+              </div>
+              <div>
+                <p style="text-align:center; font-weight:600; margin-bottom:0.5rem;">GQA 路径</p>
+                <div class="img-zoom-wrap">
+                  <img src="static/images/CP/DCP-prefill-GQA.svg" alt="DCP GQA" style="width:100%; max-height:46vh; object-fit:contain;">
+                  <button class="img-zoom-btn" onclick="event.stopPropagation();openLightbox(this.parentElement.querySelector('img').src)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+                </div>
+              </div>
+            </div>
+          </div></section>
+<!-- Ch3: vLLM PCP 特性 -->
+        <section class="aligncenter">
+          <div class="wrap">
+            <h2><strong>vLLM PCP 特性</strong></h2>
+            <p style="margin-top:1rem; font-size:1.5rem; color:#64748b;">
+              RFC &mdash; <a href="https://github.com/vllm-project/vllm/issues/25749" target="_blank">vllm#25749</a>
+              &nbsp;&middot;&nbsp; <a href="https://github.com/pisceskkk" target="_blank">@pisceskkk</a> (邱纯硕 @华为昇腾)
+            </p>
+          </div></section>
+<!-- Ch3.1: PCP 通信组 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>PCP 通信组</strong></h3>
+            <div style="height:75vh;">
+              <iframe src="src/dynamics/PCP_comm_group.html" style="width:100%; height:100%; border:1px solid #e2e8f0; border-radius:8px;" scrolling="no"></iframe>
+            </div>
+          </div></section>
+<!-- Ch3.2: PCP 序列切分 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>PCP 序列切分</strong></h3>
+            <p class="text-intro" style="margin-bottom:1.5rem;">
+              切分逻辑在 <code>cp_utils.py:PCPManager</code> 中处理，涵盖 <strong>query_lens</strong>、<strong>kv_lens</strong>、<strong>positions</strong> 等序列属性，以及 <strong>q_head_idx</strong> / <strong>q_tail_idx</strong> 偏移量的计算。
+            </p>
+            <div class="img-zoom-wrap">
+              <img src="static/images/CP/PCP-dualchunkswap.svg" alt="PCP DualChunkSwap" style="width:100%; max-height:58vh; object-fit:contain;">
+              <button class="img-zoom-btn" onclick="event.stopPropagation();openLightbox(this.parentElement.querySelector('img').src)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+            </div>
+            <p style="text-align:right; margin-top:1rem;">
+              <button class="btn-branch" onclick="jumpToBranch('branch-pcp-layout')">
+                请求切分排布示意 &#10132;
+              </button>
+            </p>
+          </div></section>
+<!-- Ch3.3: PCP Prefill 方案 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>PCP Prefill 方案</strong></h3>
+            <div class="img-zoom-wrap">
+              <img src="static/images/CP/PCP-prefill-nochunedprefill.svg" alt="PCP Prefill" style="width:100%; max-height:62vh; object-fit:contain;">
+              <button class="img-zoom-btn" onclick="event.stopPropagation();openLightbox(this.parentElement.querySelector('img').src)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+            </div>
+          </div></section>
+<!-- Ch3.4: PCP Decode 方案 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>PCP Decode 方案</strong></h3>
+            <div class="img-zoom-wrap">
+              <img src="static/images/CP/PCP-decode.svg" alt="PCP Decode" style="width:100%; max-height:62vh; object-fit:contain;">
+              <button class="img-zoom-btn" onclick="event.stopPropagation();openLightbox(this.parentElement.querySelector('img').src)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+            </div>
+          </div></section>
+<!-- Ch3.5: PCP Chunked Prefill 方案 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>PCP Chunked Prefill 方案</strong></h3>
+            <div class="img-zoom-wrap">
+              <img src="static/images/CP/PCP-chunkedprefill.svg" alt="PCP Chunked Prefill" style="width:100%; max-height:62vh; object-fit:contain;">
+              <button class="img-zoom-btn" onclick="event.stopPropagation();openLightbox(this.parentElement.querySelector('img').src)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
+            </div>
+          </div></section>
+<!-- Ch5: 部署场景 -->
+        <section class="aligncenter">
+          <div class="wrap">
+            <h2><strong>部署场景</strong></h2>
+          </div></section>
+<!-- Ch5.1: CP 适配进度 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>DCP 适配进度</strong></h3>
+            <table class="progress-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Chunked Prefill</th>
+                  <th>APC</th>
+                  <th>MTP / Eagle</th>
+                  <th>Piecewise Graph</th>
+                  <th>Full Graph</th>
+                  <th>PD 分离</th>
+                  <th>Qwen3 (GQA)</th>
+                  <th>DeepSeek (MLA)</th>
+                  <th>Qwen3.5 (混合线性)</th>
+                  <th>DSv3.2</th>
+                  <th>DSv4</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="code">vLLM DCP</td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-no"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-wip">🚧</td>
+                  <td class="status-wip">🚧</td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-wip">🚧</td>
+                  <td class="status-no"></td>
+                  <td class="status-no"></td>
+                </tr>
+                <tr>
+                  <td class="code">vLLM Ascend DCP</td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-no"></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 style="margin-top:3rem;"><strong>PCP 适配进度</strong></h3>
+            <table class="progress-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Chunked Prefill</th>
+                  <th>APC</th>
+                  <th>MTP / Eagle</th>
+                  <th>Piecewise Graph</th>
+                  <th>Full Graph</th>
+                  <th>PD 分离</th>
+                  <th>Qwen3 (GQA)</th>
+                  <th>DeepSeek (MLA)</th>
+                  <th>Qwen3.5 (混合线性)</th>
+                  <th>DSv3.2</th>
+                  <th>DSv4</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="code">vLLM PCP</td>
+                  <td class="status-wip">🚧</td>
+                  <td class="status-wip">🚧</td>
+                  <td class="status-no"></td>
+                  <td class="status-wip">🚧</td>
+                  <td class="status-no"></td>
+                  <td class="status-wip">🚧</td>
+                  <td class="status-wip">🚧</td>
+                  <td class="status-wip">🚧</td>
+                  <td class="status-no"></td>
+                  <td class="status-wip">🚧</td>
+                  <td class="status-no"></td>
+                </tr>
+                <tr>
+                  <td class="code">vLLM Ascend PCP</td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                  <td class="status-yes"></td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="legend-line"><span class="dot green"></span> 已支持 &nbsp;&nbsp;&nbsp; <span class="dot red"></span> 未支持 &nbsp;&nbsp;&nbsp; 🚧 PR 适配中</p>
+          </div></section>
+<!-- Ch5.2: DCP & PCP 部署 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>DCP 部署</strong></h3>
+            <div class="grid" style="margin-bottom:2rem;">
+              <div class="column">
+                <h4>时延</h4>
+                <p>短序列下额外通信会带来一定劣化；长序列（通常 128K 以上）因 KVCache 切分独立计算，<strong>有效降低 TPOT</strong>。</p>
+              </div>
+              <div class="column">
+                <h4>吞吐</h4>
+                <p>资源紧张时通过 DCP 提升 KVCache 容量，可承载更多并发请求，<strong>吞吐显著提升</strong>。</p>
+              </div>
+              <div class="column">
+                <h4>超长序列</h4>
+                <p>开启 DCP 后 KVCache 可用量大幅增长，常见模型可在单机 A3 上推理<strong>超过 1M token</strong> 的超长序列。</p>
+              </div>
+            </div>
+            <hr style="border:0; border-top:1px solid #e2e8f0; margin:1rem 0 1.5rem;">
+            <h3><strong>PCP 部署</strong></h3>
+            <div class="grid">
+              <div class="column">
+                <h4>性能</h4>
+                <p>中长序列（32K～256K）场景下，时延<strong>优于 DP</strong>、略逊于 TP；吞吐<strong>优于 TP</strong>、略逊于 DP，在 DP/TP 之间取得平衡。</p>
+              </div>
+              <div class="column">
+                <h4>适用场景</h4>
+                <p>当请求并发量接近系统最优吞吐时，通过 PCP 进一步降低时延，兼顾吞吐与响应速度。</p>
+              </div>
+            </div>
+          </div></section>
+<!-- Ch4: CP 特性优化与拓展 -->
+        <section class="aligncenter">
+          <div class="wrap">
+            <h2><strong>CP 特性优化与拓展</strong></h2>
+          </div></section>
+<!-- Ch4.1: TPA 特性 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>TPA 特性</strong> <span style="font-size:0.7em;color:#64748b;font-weight:400;">tensor-parallel-size-attention</span></h3>
+            <p style="margin-bottom:0.5rem; font-size:1.5rem; color:#64748b;">
+              RFC &mdash; <a href="https://github.com/vllm-project/vllm/issues/34444" target="_blank">vllm#34444</a>
+              &nbsp;&middot;&nbsp; <a href="https://github.com/SungsooHa" target="_blank">@SungsooHa</a> (NVIDIA)
+            </p>
+            <div style="display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.8rem;">
+              <div style="flex:1;">
+                <p style="font-weight:600; margin-bottom:0.1rem; font-size:1.5rem;">标准 TP + DCP 路径</p>
+                <div class="mermaid">
+graph LR
+    HS[hidden_states] --> QP["q_proj (slice by TP)"]
+    QP --> Q["Q(1, h/tp)"]
+    Q --> AG["DCP.all_gather (dim=1)"]
+    AG --> ATT[attn]
+    ATT --> CP["cp_lse_ag_out_rs (DCP)"]
+    CP --> OUT["output(1, h/tp)"]
+    OUT --> OP["o_proj (slice by TP)"]
+    OP --> END[out]
+    style AG color:#dc2626
+                </div>
+              </div>
+              <div style="flex:1;">
+                <p style="font-weight:600; margin-bottom:0.1rem; font-size:1.5rem;">TPA 优化路径 </p>
+                <div class="mermaid">
+graph LR
+    HS[hidden_states] --> QP["q_proj (slice by TPA=tp/dcp)"]
+    QP --> Q["Q(1, h*dcp/tp)"]
+    Q --> ATT[attn]
+    ATT --> CP["cp_lse_ag_out_rs (DCP)"]
+    CP --> OUT["output(1, h/tp)"]
+    OUT --> OP["o_proj (slice by TP)"]
+    OP --> END[out]
+                </div>
+              </div>
+            </div>
+            <p style="font-size:1.5rem; color:#475569;">
+              TPA 通过将 q_proj 的切分维度从 <em>TP</em> 调整为 <em>TP/DCP</em>，减少了一次 all_gather 通信，<strong>降低 KV 计算前的同步开销</strong>。
+            </p>
+            <hr style="border:0; border-top:1px solid #e2e8f0; margin:0.8rem 0;">
+            <h3 style="margin-top:0;"><strong>动态 CP 特性</strong></h3>
+            <p style="margin-bottom:0.5rem; font-size:1.5rem; color:#64748b;">
+              RFC &mdash; <a href="https://github.com/vllm-project/vllm/issues/29295" target="_blank">vllm#29295</a>
+              &nbsp;&middot;&nbsp; <a href="https://github.com/Kurumi5210" target="_blank">@Kurumi5210</a> (陈潇 @ICT&amp;UCAS)
+            </p>
+            <div class="mermaid" style="margin-bottom:0.5rem;">
+flowchart LR
+    REQ["请求到达"]
+    REQ --> JUDGE{"CrossDPScheduler<br/>按序列长度判断"}
+
+    JUDGE -->|"短序列"| CP1["CP=1 标准 DP 通路"]
+    JUDGE -->|"长序列"| CPSEL["选择最优 CP size<br/>(预建立通信组)"]
+    JUDGE -->|"长尾请求"| MIG["从 CP=1 迁移到 CP>1"]
+
+    CP1 --> DOMAIN["Domain<br/>聚合多个 DP replica<br/>为统一调度实体"]
+    CPSEL --> DOMAIN
+    MIG --> DOMAIN
+
+    DOMAIN --> SCHED["list SchedulerOutput<br/>跨 DP domain 的异构调度决策"]
+    SCHED --> RUNNER["ModelRunner<br/>CP 请求重排到 batch 最前<br/>2D CUDA Graph"]
+
+    RUNNER --> KVCACHE["CrossDPKVCacheManager<br/>统一管理跨 DP Block Pool"]
+    KVCACHE --> ATTN["Attention Backend<br/>Prefill CP + Decode CP"]
+            </div>
+            <p style="font-size:1.5rem; color:#1e293b;">
+              实测：中短序列（4K-128K）与变长场景下，吞吐和 TTFT <strong>均优于 DP</strong>，TPOT 无明显劣化。
+            </p>
+          </div></section>
+<!-- 感谢页 -->
+        <section class="aligncenter">
+          <div class="wrap">
+            <h1><strong>谢谢</strong></h1>
+            <p class="text-intro" style="margin-top:2rem;">Q &amp; A</p>
+            <p style="margin-top:3rem; font-size:1.5rem; color:#64748b;">
+              PR &mdash; <a href="https://github.com/vllm-project/vllm/pull/23734" target="_blank">vllm#23734</a>
+              &nbsp;&middot;&nbsp;
+              RFC &mdash; <a href="https://github.com/vllm-project/vllm/issues/25749" target="_blank">vllm#25749</a>
+            </p>
+          </div></section>
+
+
+<!-- ========== SLIDES END ========== -->
+
+      </article>
+      <!-- end article -->
+    </main>
+    <!-- end main -->
+
+    <!-- ========== BRANCH SLIDES (off mainline, scrollable longform) ========== -->
+    <div id="branch-container">
+<div id="branch-dcp-detail" class="branch-slide">
+        <!-- Branch sub-slide 1: BlockTable 变化 -->
+        <div class="branch-page">
+          <div class="wrap">
+            <h3><strong>BlockTable 变化</strong></h3>
+            <p class="text-intro">引入 <strong>virtual block</strong> 概念处理跨设备 block 管理，主要影响 block 分配、prefix caching 命中。</p>
+            <iframe src="src/dynamics/BlockTable.html" style="width:100%; border:1px solid #e2e8f0; border-radius:8px;" scrolling="no"></iframe>
+          </div>
+        </div>
+        <!-- Branch sub-slide 2: Token 分布 & Slot Mapping 动态演示 -->
+        <div class="branch-page">
+          <div class="wrap">
+            <h3><strong>Token 分布 &amp; Slot Mapping</strong></h3>
+            <p class="text-intro">调整 PCP size、TP size、DCP size 和 interleave 观察 token 在 KV Cache 中的分布规律与 slot 映射变化。</p>
+            <iframe src="docs/html/token-distribution.html" style="width:100%; border:1px solid #e2e8f0; border-radius:8px;" scrolling="no"></iframe>
+          </div>
+        </div>
+      </div>
+
+<div id="branch-pcp-layout" class="branch-slide">
+        <div class="branch-page">
+          <div class="wrap">
+            <h3><strong>请求切分排布示意</strong></h3>
+            <p class="text-intro">PCP Manager 对输入序列进行切分后，各 rank 上的请求排布与 token 分配示意。</p>
+            <iframe src="src/dynamics/pcp_prefill_split.html" style="width:100%; border:1px solid #e2e8f0; border-radius:8px;" scrolling="no"></iframe>
+          </div>
+        </div>
+      </div>
+
+
+    </div>
+
+    <!-- Back button (shared by all branch slides, positioned fixed top-right) -->
+    <button class="btn-back" onclick="backFromBranch()" style="display:none;" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+      返回
+    </button>
+
+    <!-- Lightbox overlay -->
+    <div id="lightbox" onclick="closeLightbox()" aria-hidden="true">
+      <button class="lb-close" onclick="closeLightbox()" type="button" aria-label="关闭图片预览">&times;</button>
+      <img id="lightbox-img" src="" alt="">
+    </div>
+
+    <!-- Required -->
+    <script src="static/js/webslides.js"></script>
+    <script src="static/js/presentation.js"></script>
+
+    <!-- OPTIONAL - svg-icons.js (fontastic.me - Font Awesome as svg icons) -->
+    <script defer src="static/js/svg-icons.js"></script>
+
+  </body>
+</html>

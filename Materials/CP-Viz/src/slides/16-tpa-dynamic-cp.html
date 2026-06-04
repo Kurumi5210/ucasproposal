@@ -1,0 +1,70 @@
+<!-- Ch4.1: TPA 特性 -->
+        <section>
+          <div class="wrap">
+            <h3><strong>TPA 特性</strong> <span style="font-size:0.7em;color:#64748b;font-weight:400;">tensor-parallel-size-attention</span></h3>
+            <p style="margin-bottom:0.5rem; font-size:1.5rem; color:#64748b;">
+              RFC &mdash; <a href="https://github.com/vllm-project/vllm/issues/34444" target="_blank">vllm#34444</a>
+              &nbsp;&middot;&nbsp; <a href="https://github.com/SungsooHa" target="_blank">@SungsooHa</a> (NVIDIA)
+            </p>
+            <div style="display:flex; flex-direction:column; gap:0.3rem; margin-bottom:0.8rem;">
+              <div style="flex:1;">
+                <p style="font-weight:600; margin-bottom:0.1rem; font-size:1.5rem;">标准 TP + DCP 路径</p>
+                <div class="mermaid">
+graph LR
+    HS[hidden_states] --> QP["q_proj (slice by TP)"]
+    QP --> Q["Q(1, h/tp)"]
+    Q --> AG["DCP.all_gather (dim=1)"]
+    AG --> ATT[attn]
+    ATT --> CP["cp_lse_ag_out_rs (DCP)"]
+    CP --> OUT["output(1, h/tp)"]
+    OUT --> OP["o_proj (slice by TP)"]
+    OP --> END[out]
+    style AG color:#dc2626
+                </div>
+              </div>
+              <div style="flex:1;">
+                <p style="font-weight:600; margin-bottom:0.1rem; font-size:1.5rem;">TPA 优化路径 </p>
+                <div class="mermaid">
+graph LR
+    HS[hidden_states] --> QP["q_proj (slice by TPA=tp/dcp)"]
+    QP --> Q["Q(1, h*dcp/tp)"]
+    Q --> ATT[attn]
+    ATT --> CP["cp_lse_ag_out_rs (DCP)"]
+    CP --> OUT["output(1, h/tp)"]
+    OUT --> OP["o_proj (slice by TP)"]
+    OP --> END[out]
+                </div>
+              </div>
+            </div>
+            <p style="font-size:1.5rem; color:#475569;">
+              TPA 通过将 q_proj 的切分维度从 <em>TP</em> 调整为 <em>TP/DCP</em>，减少了一次 all_gather 通信，<strong>降低 KV 计算前的同步开销</strong>。
+            </p>
+            <hr style="border:0; border-top:1px solid #e2e8f0; margin:0.8rem 0;">
+            <h3 style="margin-top:0;"><strong>动态 CP 特性</strong></h3>
+            <p style="margin-bottom:0.5rem; font-size:1.5rem; color:#64748b;">
+              RFC &mdash; <a href="https://github.com/vllm-project/vllm/issues/29295" target="_blank">vllm#29295</a>
+              &nbsp;&middot;&nbsp; <a href="https://github.com/Kurumi5210" target="_blank">@Kurumi5210</a> (陈潇 @ICT&amp;UCAS)
+            </p>
+            <div class="mermaid" style="margin-bottom:0.5rem;">
+flowchart LR
+    REQ["请求到达"]
+    REQ --> JUDGE{"CrossDPScheduler<br/>按序列长度判断"}
+
+    JUDGE -->|"短序列"| CP1["CP=1 标准 DP 通路"]
+    JUDGE -->|"长序列"| CPSEL["选择最优 CP size<br/>(预建立通信组)"]
+    JUDGE -->|"长尾请求"| MIG["从 CP=1 迁移到 CP>1"]
+
+    CP1 --> DOMAIN["Domain<br/>聚合多个 DP replica<br/>为统一调度实体"]
+    CPSEL --> DOMAIN
+    MIG --> DOMAIN
+
+    DOMAIN --> SCHED["list SchedulerOutput<br/>跨 DP domain 的异构调度决策"]
+    SCHED --> RUNNER["ModelRunner<br/>CP 请求重排到 batch 最前<br/>2D CUDA Graph"]
+
+    RUNNER --> KVCACHE["CrossDPKVCacheManager<br/>统一管理跨 DP Block Pool"]
+    KVCACHE --> ATTN["Attention Backend<br/>Prefill CP + Decode CP"]
+            </div>
+            <p style="font-size:1.5rem; color:#1e293b;">
+              实测：中短序列（4K-128K）与变长场景下，吞吐和 TTFT <strong>均优于 DP</strong>，TPOT 无明显劣化。
+            </p>
+          </div></section>

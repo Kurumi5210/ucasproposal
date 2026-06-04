@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KVCache Storage Block Interleave Visualizer</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --ink: #111827;
+      --muted: #6b7280;
+      --line: #1f2937;
+      --highlight: #fff3c4;
+      --accent: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 6px 10px 8px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 215px 215px 215px 1fr;
+      gap: 10px;
+      align-items: end;
+      padding: 7px 10px;
+      margin-bottom: 8px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #f9fafb;
+    }
+
+    .control {
+      display: grid;
+      gap: 3px;
+      font-size: 11px;
+    }
+
+    .control label {
+      font-weight: 700;
+      color: #374151;
+    }
+
+    .control input {
+      height: 22px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 0 6px;
+      font-size: 12px;
+      background: #fff;
+    }
+
+    .control .value {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      align-items: center;
+      font-size: 12px;
+      color: #374151;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .swatch {
+      width: 22px;
+      height: 12px;
+      border: 1px solid var(--line);
+      background: var(--highlight);
+    }
+
+    .swatch.red {
+      border: 2px solid var(--accent);
+      background: transparent;
+      border-radius: 4px;
+    }
+
+    .diagram-wrap {
+      overflow-x: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #fff;
+      padding: 0 3px;
+      line-height: 0;
+    }
+
+    svg {
+      display: block;
+      width: 1120px;
+      height: 390;
+      background: white;
+    }
+
+    .panel-box {
+      fill: #fff;
+      stroke: var(--line);
+      stroke-width: 1.2;
+    }
+
+    .panel-title {
+      font-size: 20px;
+      font-weight: 700;
+      text-anchor: middle;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      text-anchor: middle;
+    }
+
+    .rank-label {
+      font-size: 12px;
+      text-anchor: middle;
+      fill: #111827;
+    }
+
+    .axis-label {
+      font-size: 12px;
+      fill: #111827;
+    }
+
+    .small-label {
+      font-size: 12px;
+      fill: #111827;
+    }
+
+    .note-red {
+      fill: var(--accent);
+      font-size: 12px;
+    }
+
+    .cell {
+      fill: #fff;
+      stroke: #111827;
+      stroke-width: 0.9;
+    }
+
+    .cell.group0 { fill: #fff2cc; }
+    .cell.group1 { fill: #dbeafe; }
+    .cell.group2 { fill: #dcfce7; }
+    .cell.group3 { fill: #f3e8ff; }
+    .cell.group4 { fill: #ffedd5; }
+    .cell.group5 { fill: #fee2e2; }
+    .cell.group6 { fill: #e0f2fe; }
+    .cell.group7 { fill: #ecfccb; }
+
+    .token-text {
+      font-size: 11px;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      fill: #111827;
+    }
+
+    .arrow {
+      fill: none;
+      stroke: #111827;
+      stroke-width: 1.2;
+      marker-end: url(#arrow);
+    }
+
+    .dash {
+      fill: none;
+      stroke: #4b5563;
+      stroke-dasharray: 3 4;
+      stroke-width: 1;
+      marker-end: url(#arrow);
+    }
+
+    .brace {
+      fill: none;
+      stroke: #111827;
+      stroke-width: 1.2;
+    }
+
+    .highlight-box {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 2;
+      rx: 8;
+      ry: 8;
+    }
+
+    .virtual-outline {
+      fill: none;
+      stroke: #111827;
+      stroke-width: 1.1;
+      rx: 15;
+      ry: 15;
+    }
+
+    .caption {
+      font-size: 12px;
+      text-anchor: middle;
+      fill: #111827;
+    }
+
+    .slot-section {
+      margin-top: 5px;
+    }
+
+    .slot-section h2 {
+      margin: 0 0 4px;
+      font-size: 15px;
+      line-height: 1.1;
+    }
+
+    .slot-card {
+      display: grid;
+      grid-template-columns: 78px 1fr;
+      gap: 6px;
+      align-items: center;
+      margin: 3px 0;
+      padding: 3px 6px;
+      border: 1px solid #d6e0ee;
+      border-radius: 7px;
+      background: #fbfdff;
+    }
+
+    .slot-label {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: #475569;
+      white-space: nowrap;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }    
+    .chip {
+      min-width: 38px;
+      height: 20px;
+      padding: 0 5px;
+      border-radius: 4px;
+      border: 1px solid #2563eb;
+      background: #dbeafe;
+      color: #1e3a8a;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+    }
+
+    .chip.local {
+      border-color: #86d99d;
+      background: #bbf7d0;
+      color: #166534;
+      font-weight: 700;
+    }
+
+    .chip.remote {
+      border-color: #60a5fa;
+      background: #bfdbfe;
+      color: #1d4ed8;
+    }
+
+    .chip.miss {
+      border-color: #3b82f6;
+      background: #e5efff;
+      color: #334155;
+    }
+
+    @media (max-width: 900px) {
+      .controls {
+        grid-template-columns: 1fr;
+      }
+      .page {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <div class="controls">
+      <div class="control">
+        <label for="interleaveSize">Block interleave size</label>
+        <input id="interleaveSize" type="range" min="1" max="16" value="4" />
+        <div class="value">当前：<span id="interleaveSizeVal">4</span> token</div>
+      </div>
+
+      <div class="control">
+        <label for="numTokens">展示 token 数</label>
+        <input id="numTokens" type="range" min="16" max="128" step="8" value="64" />
+        <div class="value">当前：<span id="numTokensVal">64</span></div>
+      </div>
+
+      <div class="control">
+        <label for="pTokenCount">Slot 示例中的 P token 数</label>
+        <input id="pTokenCount" type="range" min="4" max="48" step="4" value="18" />
+        <div class="value">当前：<span id="pTokenCountVal">18</span></div>
+      </div>
+
+      <div class="legend">
+        <span class="legend-item"><span class="swatch"></span>已映射 token</span>
+        <span class="legend-item"><span class="swatch red"></span>当前 interleave group</span>
+      </div>
+    </div>
+
+    <div class="diagram-wrap">
+      <svg id="diagram" viewBox="0 0 1120 390" role="img" aria-label="KVCache Storage block interleave visualizer">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#111827"></path>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+
+    <div class="slot-section">
+      <h2>Slot Mapping 示例</h2>
+      <div class="slot-card">
+        <div class="slot-label">token order</div>
+        <div class="chip-row" id="tokenOrder"></div>
+      </div>
+      <div id="slotRows"></div>
+    </div>
+
+  </div>
+
+  <script>
+    const svg = document.getElementById("diagram");
+    const interleaveSizeEl = document.getElementById("interleaveSize");
+    const numTokensEl = document.getElementById("numTokens");
+    const pTokenCountEl = document.getElementById("pTokenCount");
+    const slotRowsEl = document.getElementById("slotRows");
+    const tokenOrderEl = document.getElementById("tokenOrder");
+
+    const NS = "http://www.w3.org/2000/svg";
+    const CP_SIZE = 4;
+    const BLOCK_SIZE = 16;
+
+    function el(tag, attrs = {}, children = []) {
+      const node = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === "text") node.textContent = v;
+        else node.setAttribute(k, v);
+      }
+      for (const child of children) node.appendChild(child);
+      return node;
+    }
+
+    function text(x, y, value, cls = "small-label", anchor = null) {
+      const attrs = { x, y, class: cls, text: value };
+      if (anchor) attrs["text-anchor"] = anchor;
+      return el("text", attrs);
+    }
+
+    function multilineText(x, y, lines, cls = "small-label", lineHeight = 14, anchor = "middle") {
+      const t = el("text", { x, y, class: cls, "text-anchor": anchor });
+      lines.forEach((line, i) => {
+        t.appendChild(el("tspan", { x, dy: i === 0 ? 0 : lineHeight, text: line }));
+      });
+      return t;
+    }
+
+    function clearSvg() {
+      [...svg.children].forEach((child) => {
+        if (child.tagName.toLowerCase() !== "defs") child.remove();
+      });
+    }
+
+    function addPanel(x, y, w, h, title, subtitle) {
+      svg.appendChild(el("rect", { x, y, width: w, height: h, class: "panel-box" }));
+      if (subtitle) svg.appendChild(text(x + w / 2, y - 14, subtitle, "panel-title"));
+      svg.appendChild(text(x + w / 2, y + 24, title, "section-title"));
+    }
+
+    function drawBrace(x, y1, y2, label) {
+      const mid = (y1 + y2) / 2;
+      const d = `M ${x} ${y1} C ${x+10} ${y1}, ${x+10} ${y1+8}, ${x+10} ${y1+12}
+                 L ${x+10} ${mid-12}
+                 C ${x+10} ${mid-4}, ${x+18} ${mid-4}, ${x+18} ${mid}
+                 C ${x+18} ${mid+4}, ${x+10} ${mid+4}, ${x+10} ${mid+12}
+                 L ${x+10} ${y2-12}
+                 C ${x+10} ${y2-8}, ${x+10} ${y2}, ${x} ${y2}`;
+      svg.appendChild(el("path", { d, class: "brace" }));
+      svg.appendChild(text(x + 32, mid + 4, label, "axis-label"));
+    }
+
+    function drawRankColumns({ x, y, rows, cellW, cellH, gap, tokensByRank, colorByGroup = true, highlightRows = 0 }) {
+      for (let r = 0; r < CP_SIZE; r++) {
+        const colX = x + r * (cellW + gap);
+        svg.appendChild(text(colX + cellW / 2, y - 12, `rank${r}`, "rank-label"));
+
+        const tokens = tokensByRank[r] || [];
+        for (let row = 0; row < rows; row++) {
+          const token = tokens[row];
+          let cls = "cell";
+          if (token) cls += colorByGroup ? ` group${Math.floor(token.group ?? 0) % 8}` : " filled";
+
+          svg.appendChild(el("rect", {
+            x: colX, y: y + row * cellH,
+            width: cellW, height: cellH,
+            class: cls
+          }));
+
+          if (token) {
+            svg.appendChild(text(
+              colX + cellW / 2,
+              y + row * cellH + cellH / 2 + 1,
+              token.label ?? `tok${token.id}`,
+              "token-text"
+            ));
+          }
+        }
+
+        if (highlightRows > 0 && r === 0) {
+          svg.appendChild(el("rect", {
+            x: colX - 5,
+            y: y - 5,
+            width: cellW + 10,
+            height: Math.min(highlightRows, rows) * cellH + 10,
+            class: "highlight-box"
+          }));
+        }
+      }
+    }
+
+    function buildOverviewRows(numBlocks) {
+      const rows = Array.from({ length: CP_SIZE }, () => []);
+      for (let r = 0; r < CP_SIZE; r++) {
+        for (let b = 0; b < 9; b++) {
+          rows[r].push({
+            label: b < numBlocks ? `B${b}` : "",
+            id: b,
+            group: b
+          });
+        }
+      }
+      return rows;
+    }
+
+    function buildBlockInterleave(interleaveSize, numTokens) {
+      const ranks = Array.from({ length: CP_SIZE }, () => []);
+      for (let t = 0; t < numTokens; t++) {
+        const group = Math.floor(t / interleaveSize);
+        const r = group % CP_SIZE;
+        ranks[r].push({ id: t, group });
+      }
+      return ranks;
+    }
+
+    function drawOverview(numTokens) {
+      addPanel(10, 8, 430, 355, "Block Table", null);
+
+      const x = 82;
+      const y = 78;
+      const cellW = 54;
+      const cellH = 23;
+      const gap = 28;
+      const rows = 12;
+      const numBlocks = Math.ceil(numTokens / (BLOCK_SIZE * CP_SIZE));
+
+      drawRankColumns({
+        x, y, rows, cellW, cellH, gap,
+        tokensByRank: buildOverviewRows(numBlocks),
+        colorByGroup: true,
+        highlightRows: 0
+      });
+
+      svg.appendChild(text(38, y + 145, "block", "axis-label"));
+
+      /*
+       * The source draw.io figure visually selects a virtual block spanning one
+       * horizontal row across all ranks, not a tall vertical region.
+       */
+      const outlineX = x - 16;
+      const outlineY = y - 5;
+      const outlineW = CP_SIZE * cellW + (CP_SIZE - 1) * gap + 32;
+      const outlineH = cellH + 10;
+      svg.appendChild(el("rect", {
+        x: outlineX,
+        y: outlineY,
+        width: outlineW,
+        height: outlineH,
+        class: "virtual-outline"
+      }));
+
+      const sourceX = outlineX + outlineW;
+      const sourceY = outlineY + outlineH / 2;
+
+      /*
+       * Place the label outside the selected row, near and slightly above the rank labels.
+       * This avoids covering rank3 / B0 while keeping the label visually attached.
+       */
+      svg.appendChild(multilineText(sourceX + 18, y - 28, ["virtual", "block"], "section-title", 18, "start"));
+
+      svg.appendChild(el("path", {
+        d: `M ${sourceX} ${sourceY} L 525 18`,
+        class: "arrow"
+      }));
+      svg.appendChild(el("path", {
+        d: `M ${sourceX} ${sourceY} L 525 348`,
+        class: "arrow"
+      }));
+      svg.appendChild(el("path", {
+        d: `M ${sourceX} ${sourceY} L 525 155`,
+        class: "dash"
+      }));
+    }
+
+    function drawBlockPanel(interleaveSize, numTokens) {
+      const x0 = 530;
+      const y0 = 8;
+      const w = 560;
+      const h = 355;
+
+      addPanel(x0, y0, w, h, "Virtual Block", "Block Interleave");
+
+      svg.appendChild(multilineText(x0 + 16, y0 + 26, ["cp_kv_cache", "_interleave_size"], "note-red", 13, "start"));
+
+      const x = x0 + 90;
+      const y = y0 + 48;
+      const cellW = 70;
+      const cellH = 18;
+      const gap = 20;
+      const rows = 16;
+
+      drawRankColumns({
+        x, y, rows, cellW, cellH, gap,
+        tokensByRank: buildBlockInterleave(interleaveSize, numTokens),
+        colorByGroup: true,
+        highlightRows: interleaveSize
+      });
+
+      drawBrace(x + CP_SIZE * cellW + (CP_SIZE - 1) * gap + 14, y, y + rows * cellH, "block");
+      svg.appendChild(text(x0 + w / 2, y + rows * cellH + 14, "floor(token_id / interleave_size) % CP_size → rank", "caption"));
+    }
+
+
+    function makeChip(value, cls = "") {
+      const span = document.createElement("span");
+      span.className = `chip ${cls}`;
+      span.textContent = value;
+      return span;
+    }
+
+    function buildTokenOrderExample(pTokenCount) {
+      const order = [];
+      order.push({ kind: "D", id: 20, tokenId: 20, startId: 128 });
+      order.push({ kind: "D", id: 27, tokenId: 27, startId: 256});
+      for (let i = 0; i < pTokenCount; i++) {
+        order.push({ kind: "P", id: i, tokenId: i, startId: 384});
+      }
+      return order;
+    }
+
+    function renderSlotMappingExample(interleaveSize, pTokenCount) {
+      const order = buildTokenOrderExample(pTokenCount);
+
+      slotRowsEl.innerHTML = "";
+      tokenOrderEl.innerHTML = "";
+
+      for (let localDcpRank = 0; localDcpRank < CP_SIZE; localDcpRank++) {
+        const card = document.createElement("div");
+        card.className = "slot-card";
+
+        const label = document.createElement("div");
+        label.className = "slot-label";
+        label.textContent = `slot@dcp${localDcpRank}`;
+
+        const row = document.createElement("div");
+        row.className = "chip-row";
+
+        for (const item of order) {
+          const tokenId = item.tokenId;
+          const owner = Math.floor(tokenId / interleaveSize) % CP_SIZE;
+          const localIndex = Math.floor(tokenId / (interleaveSize * CP_SIZE)) * interleaveSize
+                           + (tokenId % interleaveSize);
+          const physicalSlot = item.startId + localIndex;
+          const isLocal = owner === localDcpRank;
+
+          row.appendChild(makeChip(isLocal ? physicalSlot : "-1", isLocal ? "local" : "miss"));
+        }
+
+        card.appendChild(label);
+        card.appendChild(row);
+        slotRowsEl.appendChild(card);
+      }
+
+      for (const item of order) {
+        tokenOrderEl.appendChild(makeChip(`${item.kind}${item.id}`, item.kind === "D" ? "remote" : ""));
+      }
+    }
+
+    function render() {
+      const interleaveSize = Number(interleaveSizeEl.value);
+      const numTokens = Number(numTokensEl.value);
+      const pTokenCount = Number(pTokenCountEl.value);
+
+      document.getElementById("interleaveSizeVal").textContent = interleaveSize;
+      document.getElementById("numTokensVal").textContent = numTokens;
+      document.getElementById("pTokenCountVal").textContent = pTokenCount;
+
+      clearSvg();
+      drawOverview(numTokens);
+      drawBlockPanel(interleaveSize, numTokens);
+
+      renderSlotMappingExample(interleaveSize, pTokenCount);
+    }
+
+    [interleaveSizeEl, numTokensEl, pTokenCountEl].forEach((node) => {
+      node.addEventListener("input", render);
+      node.addEventListener("change", render);
+    });
+
+    render();
+  </script>
+</body>
+</html>
