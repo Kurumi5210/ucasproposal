@@ -1,0 +1,56 @@
+\documentclass[border=6pt]{standalone}
+\input{Figures/proposal-figure-style.tex}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm]
+    \node[title] at (7.9,8.15) {Decode 节点动态 CP 与跨 DP 调度};
+    \node[subtitle] at (7.9,7.72) {短请求保持 CP=1 的低开销路径，超长请求按需跨多个 DP-attention 副本协同处理，缓解 Decode 阶段 KV 访存 straggler};
+
+    \node[block, minimum width=2.8cm, minimum height=5.2cm] (traffic) at (1.85,4.25) {};
+    \node[font=\sffamily\bfseries\small] at (1.85,6.35) {在线请求流};
+    \foreach \i/\y in {0/5.65,1/5.15,2/4.65,3/4.15} {
+        \node[metric, fill=white, minimum width=1.45cm] at (1.35,\y) {短请求};
+        \node[small, text=muted] at (2.52,\y) {4K--32K};
+    }
+    \node[metric, fill=accent, draw=accentLine, minimum width=1.45cm] at (1.35,3.25) {长请求};
+    \node[small, text=accentLine] at (2.55,3.25) {256K--1M};
+    \node[small, text=muted] at (1.85,2.28) {混部流量导致\\DP 副本负载倾斜};
+
+    \node[vblock, minimum width=3.45cm, minimum height=2.55cm] (scheduler) at (5.25,4.9) {};
+    \node[font=\sffamily\bfseries\small, text=violetLine] at (5.25,5.9) {CrossDPScheduler};
+    \node[small] at (5.25,5.42) {上下文长度};
+    \node[small] at (5.25,5.0) {KV Pool 压力};
+    \node[small] at (5.25,4.58) {并发与队列深度};
+    \node[small, text=violetLine] at (5.25,4.03) {选择 CP 粒度};
+
+    \node[dblock, minimum width=3.55cm, minimum height=4.8cm] (short) at (9.0,4.95) {};
+    \node[font=\sffamily\bfseries\small, text=decodeLine] at (9.0,6.72) {短请求路径};
+    \node[metric, fill=decode, minimum width=2.0cm] at (9.0,6.1) {CP=1};
+    \node[rank, fill=white, minimum width=1.3cm] (dp0) at (8.25,5.3) {DP0};
+    \node[rank, fill=white, minimum width=1.3cm] (dp1) at (9.75,5.3) {DP1};
+    \node[head, fill=kv, minimum width=1.15cm] at (8.25,4.55) {本地 KV};
+    \node[head, fill=kv, minimum width=1.15cm] at (9.75,4.55) {本地 KV};
+    \node[small, text=decodeLine] at (9.0,3.55) {低通信开销\\保持常规 DP-attention};
+
+    \node[tblock, minimum width=4.45cm, minimum height=4.8cm] (long) at (13.65,4.95) {};
+    \node[font=\sffamily\bfseries\small, text=tealLine] at (13.65,6.72) {长请求路径};
+    \node[metric, fill=teal, draw=tealLine, minimum width=2.0cm] at (13.65,6.1) {CP>1};
+    \foreach \i/\x in {2/12.3,3/13.2,4/14.1,5/15.0} {
+        \node[rank, fill=white, minimum width=0.72cm] (dp\i) at (\x,5.3) {DP\i};
+        \node[head, fill=kv, minimum width=0.68cm] at (\x,4.55) {KV};
+    }
+    \node[metric, fill=white, minimum width=3.45cm] (mgr) at (13.65,3.78) {CrossDPKVCacheManager};
+    \node[metric, fill=white, minimum width=3.45cm] (agg) at (13.65,2.95) {score/LSE 聚合};
+
+    \node[block, minimum width=2.3cm, minimum height=1.05cm] (out) at (17.35,4.95) {稳定 Decode\\token 输出};
+
+    \draw[arrow] (traffic.east) -- node[label, above] {请求元数据} (scheduler.west);
+    \draw[greenarrow] (scheduler.east) -- node[label, above] {短请求} (short.west);
+    \draw[orangearrow] (scheduler.east) to[out=-15,in=180] node[label, below] {长请求} (long.west);
+    \draw[greenarrow] (short.east) -- (out.west);
+    \draw[greenarrow] (long.east) -- (out.west);
+
+    \node[warnblock, minimum width=4.35cm, minimum height=0.95cm] at (5.25,1.45) {静态 CP：短请求多付通信开销\\或长请求集中成 straggler};
+    \node[tblock, minimum width=6.0cm, minimum height=0.95cm] at (12.15,1.45) {动态 CP：用跨 DP 通信换取 HBM 访存分摊\\1M、16 rps 前期实验 P90 ITL 约 60 ms};
+\end{tikzpicture}
+\end{document}

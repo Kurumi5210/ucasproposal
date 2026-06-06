@@ -41,13 +41,27 @@
 %- [math]% enable some extra math packages
 %- [xlink]% disable link colors
 %\usepackage{Style/artracom}% user defined commands
-\setCJKmainfont{AR PL UMing CN}[AutoFakeBold=2.5,ItalicFont=AR PL KaitiM GB]%
-\setCJKsansfont{WenQuanYi Zen Hei}[AutoFakeBold=2.5]%
-\setCJKmonofont{WenQuanYi Zen Hei Mono}[AutoFakeBold=2.5]%
-\setCJKfamilyfont{zhsong}{AR PL UMing CN}[AutoFakeBold=2.5]%
-\setCJKfamilyfont{zhhei}{WenQuanYi Zen Hei}[AutoFakeBold=2.5]%
-\setCJKfamilyfont{zhfs}{AR PL UMing CN}[AutoFakeBold=2.5]%
-\setCJKfamilyfont{zhkai}{AR PL KaitiM GB}[AutoFakeBold=2.5]%
+%---------------------------------------------------------------------------%
+%->> Font configuration
+%---------------------------------------------------------------------------%
+%- English text font: Times New Roman (Windows TrueType)
+\setmainfont{Times New Roman}[Ligatures=TeX]%
+%- CJK serif font: SimSun (宋体) for body text
+\setCJKmainfont{SimSun}[
+    ItalicFont=KaiTi,
+    AutoFakeBold=2.5,
+]%
+%- CJK sans-serif font: SimHei (黑体) for headings
+\setCJKsansfont{SimHei}[
+    AutoFakeBold=2.5,
+]%
+%- CJK monospace font: FangSong (仿宋)
+\setCJKmonofont{FangSong}[AutoFakeBold=2.5]%
+%- CJK family fonts for specific use
+\setCJKfamilyfont{zhsong}{SimSun}[AutoFakeBold=2.5]%
+\setCJKfamilyfont{zhhei}{SimHei}[AutoFakeBold=2.5]%
+\setCJKfamilyfont{zhkai}{KaiTi}[AutoFakeBold=2.5]%
+\setCJKfamilyfont{zhfs}{FangSong}[AutoFakeBold=2.5]%
 %---------------------------------------------------------------------------%
 %->> Document inclusion
 %---------------------------------------------------------------------------%

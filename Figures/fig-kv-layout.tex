@@ -1,0 +1,56 @@
+\documentclass[border=6pt]{standalone}
+\input{Figures/proposal-figure-style.tex}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm]
+    \node[title] at (8.5,8.15) {PD 分离中的 KV Cache 布局映射与转换};
+    \node[subtitle] at (8.5,7.72) {P/D 两侧 TP、PP 与注意力结构可能不同，Connector 需要把源端 KV 精确转换成 Decode 侧 PageAttention 可消费的 block 布局};
+
+    \node[pblock, minimum width=4.7cm, minimum height=5.6cm] (prefill) at (2.85,4.25) {};
+    \node[font=\sffamily\bfseries\small, text=prefillLine] at (2.85,6.65) {Prefill 侧 KV 生产};
+    \node[small, text=muted] at (2.85,6.25) {示例：P TP=4，PP=2};
+
+    \foreach \y/\stage in {5.45/PP stage 0,4.6/PP stage 0,3.35/PP stage 1,2.5/PP stage 1} {
+        \node[rank, minimum width=1.2cm] at (1.08,\y) {\stage};
+    }
+    \foreach \i/\y in {0/5.45,1/4.6,2/3.35,3/2.5} {
+        \node[rank, fill=white, minimum width=1.0cm] at (2.15,\y) {P\i};
+        \node[head, fill=teal] at (3.1,\y) {$h_{\i}$};
+        \node[head, fill=kv] at (3.78,\y) {$B_{0..n}$};
+    }
+    \node[small, text=muted] at (2.85,1.75) {GQA/MHA/MQA：KV head 随 TP rank 切分};
+
+    \node[kvblock, minimum width=4.25cm, minimum height=5.6cm] (connector) at (8.45,4.25) {};
+    \node[font=\sffamily\bfseries\small, text=kvLine] at (8.45,6.65) {KV Connector};
+    \node[metric, fill=white, minimum width=3.25cm] (s1) at (8.45,5.72) {1. 感知 TP/PP/layer partition};
+    \node[metric, fill=white, minimum width=3.25cm] (s2) at (8.45,4.9) {2. 选择 P rank 或 rank 集合};
+    \node[metric, fill=white, minimum width=3.25cm] (s3) at (8.45,4.08) {3. HCCL/HCCS/RDMA 传输};
+    \node[metric, fill=white, minimum width=3.25cm] (s4) at (8.45,3.26) {4. split / cat / transpose by block};
+    \node[metric, fill=white, minimum width=3.25cm] (s5) at (8.45,2.44) {\_npu\_page\_load + reshape\_and\_cache};
+    \node[small, text=accentLine] at (8.45,1.55) {目标：减少逐层逐 block 的 copy/reshape 与 kernel launch};
+
+    \node[dblock, minimum width=4.75cm, minimum height=5.6cm] (decode) at (14.0,4.25) {};
+    \node[font=\sffamily\bfseries\small, text=decodeLine] at (14.0,6.65) {Decode 侧 KV 消费};
+    \node[small, text=muted] at (14.0,6.25) {PageAttention block table / slot mapping};
+    \foreach \r/\x in {0/12.75,1/15.25} {
+        \node[rank, fill=white, minimum width=1.45cm] at (\x,5.42) {D rank \r};
+    }
+    \foreach \x/\h in {12.25/h_0,12.82/h_1,14.72/h_2,15.29/h_3} {
+        \node[head, fill=teal] at (\x,4.82) {$\h$};
+    }
+    \foreach \i/\x in {0/12.18,1/12.75,2/13.32,3/14.62,4/15.19,5/15.76} {
+        \node[head, fill=kv, minimum width=5.3mm] at (\x,4.15) {$B_{\i}$};
+    }
+    \node[metric, fill=decode, minimum width=3.4cm] at (14.0,3.25) {本地 KV block 写入};
+    \node[metric, fill=white, minimum width=3.4cm] at (14.0,2.45) {Decode forward 读取分片 KV};
+    \node[small, text=decodeLine] at (14.0,1.75) {保证输出一致性，并在 D 写入完成后释放 P 侧缓存};
+
+    \draw[kvarrow] (prefill.east) -- node[label, above] {源端 KV layout} (connector.west);
+    \draw[kvarrow] (connector.east) -- node[label, above] {目标端 block layout} (decode.west);
+    \draw[control] (s1.east) to[out=0,in=180] (decode.170);
+    \draw[control] (s2.west) to[out=180,in=0] (prefill.10);
+
+    \node[warnblock, minimum width=4.55cm, minimum height=0.75cm] at (3.55,0.6) {MLA：可在等价 P rank 中负载均衡};
+    \node[warnblock, minimum width=8.25cm, minimum height=0.75cm] at (10.9,0.6) {GQA/MHA/MQA：必须按 KV head 和 layer 精确匹配，避免 head 缺失或 block 无法消费};
+\end{tikzpicture}
+\end{document}

@@ -1,0 +1,98 @@
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{
+    arrows.meta,
+    backgrounds,
+    calc,
+    decorations.pathreplacing,
+    fit,
+    positioning,
+    shapes.geometric
+}
+
+\setmainfont{Times New Roman}
+\setsansfont{Noto Sans SC}
+\setCJKmainfont{Noto Sans SC}
+\setCJKsansfont{Noto Sans SC}
+
+\definecolor{ink}{HTML}{1F2937}
+\definecolor{muted}{HTML}{64748B}
+\definecolor{lineblue}{HTML}{2563EB}
+\definecolor{prefill}{HTML}{E7F0FF}
+\definecolor{prefillLine}{HTML}{2F5597}
+\definecolor{decode}{HTML}{EAF7EA}
+\definecolor{decodeLine}{HTML}{2F7D32}
+\definecolor{kv}{HTML}{FFF3D8}
+\definecolor{kvLine}{HTML}{B7791F}
+\definecolor{accent}{HTML}{FDE8E8}
+\definecolor{accentLine}{HTML}{C2410C}
+\definecolor{panel}{HTML}{F8FAFC}
+\definecolor{panelLine}{HTML}{94A3B8}
+\definecolor{violet}{HTML}{F1ECFF}
+\definecolor{violetLine}{HTML}{6D28D9}
+\definecolor{teal}{HTML}{DFF7F3}
+\definecolor{tealLine}{HTML}{0F766E}
+
+\tikzset{
+    every picture/.style={font=\sffamily},
+    title/.style={font=\sffamily\bfseries\Large, text=ink},
+    subtitle/.style={font=\sffamily\small, text=muted, align=center},
+    block/.style={
+        draw=panelLine,
+        rounded corners=5pt,
+        fill=white,
+        line width=0.8pt,
+        align=center,
+        inner xsep=7pt,
+        inner ysep=6pt
+    },
+    pblock/.style={block, fill=prefill, draw=prefillLine},
+    dblock/.style={block, fill=decode, draw=decodeLine},
+    kvblock/.style={block, fill=kv, draw=kvLine},
+    warnblock/.style={block, fill=accent, draw=accentLine},
+    vblock/.style={block, fill=violet, draw=violetLine},
+    tblock/.style={block, fill=teal, draw=tealLine},
+    cluster/.style={
+        draw=panelLine,
+        rounded corners=6pt,
+        fill=panel,
+        line width=0.8pt,
+        inner sep=8pt
+    },
+    arrow/.style={-{Latex[length=3mm,width=2mm]}, draw=ink, line width=0.85pt},
+    bluearrow/.style={arrow, draw=prefillLine},
+    greenarrow/.style={arrow, draw=decodeLine},
+    kvarrow/.style={arrow, draw=kvLine},
+    orangearrow/.style={arrow, draw=accentLine},
+    control/.style={-{Latex[length=2.6mm,width=1.8mm]}, draw=muted, line width=0.75pt, dashed},
+    label/.style={font=\sffamily\scriptsize, text=muted, align=center},
+    small/.style={font=\sffamily\scriptsize, align=center},
+    rank/.style={
+        draw=panelLine,
+        rounded corners=3pt,
+        fill=white,
+        minimum width=12mm,
+        minimum height=6mm,
+        font=\sffamily\scriptsize,
+        align=center
+    },
+    head/.style={
+        draw=ink,
+        line width=0.35pt,
+        minimum width=6.5mm,
+        minimum height=4.8mm,
+        font=\sffamily\tiny,
+        align=center
+    },
+    metric/.style={
+        draw=panelLine,
+        rounded corners=4pt,
+        fill=white,
+        font=\sffamily\scriptsize,
+        align=center,
+        inner xsep=5pt,
+        inner ysep=4pt
+    }
+}

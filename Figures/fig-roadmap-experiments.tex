@@ -1,0 +1,55 @@
+\documentclass[border=6pt]{standalone}
+\input{Figures/proposal-figure-style.tex}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm]
+    \node[title] at (8.6,8.1) {研究路线与实验闭环};
+    \node[subtitle] at (8.6,7.66) {按“性能剖析、PD/KV 适配、Decode 动态 CP、运行时弹性与 KV 去冗余”逐步推进，并用端到端指标反向校准设计};
+
+    \node[cluster, minimum width=3.3cm, minimum height=4.7cm] (input) at (1.95,4.45) {};
+    \node[font=\sffamily\bfseries\small] at (1.95,6.35) {实验输入};
+    \node[metric, fill=white, minimum width=2.55cm] at (1.95,5.55) {模型：Qwen / DeepSeek};
+    \node[metric, fill=white, minimum width=2.55cm] at (1.95,4.82) {平台：昇腾 910 系列};
+    \node[metric, fill=white, minimum width=2.55cm] at (1.95,4.09) {上下文：4K--1M};
+    \node[metric, fill=white, minimum width=2.55cm] at (1.95,3.36) {负载：1--16 rps};
+    \node[metric, fill=white, minimum width=2.55cm] at (1.95,2.63) {对照：混合部署/静态 CP};
+
+    \node[pblock, minimum width=2.55cm, minimum height=2.0cm] (s1) at (5.15,5.65) {\textbf{1 性能剖析}\\[2pt]TTFT/TPOT/ITL\\HBM 与 AI Core};
+    \node[kvblock, minimum width=2.55cm, minimum height=2.0cm] (s2) at (8.15,5.65) {\textbf{2 PD/KV 适配}\\[2pt]TP/PP 映射\\KV layout 转换};
+    \node[dblock, minimum width=2.55cm, minimum height=2.0cm] (s3) at (11.15,5.65) {\textbf{3 动态 CP}\\[2pt]Domain 调度\\跨 DP attention};
+    \node[vblock, minimum width=2.55cm, minimum height=2.0cm] (s4) at (14.15,5.65) {\textbf{4 弹性与去冗余}\\[2pt]DP 扩缩容\\TP 域 DCP};
+
+    \node[small, text=muted] at (5.15,4.17) {2026.06--08};
+    \node[small, text=muted] at (8.15,4.17) {2026.09--11};
+    \node[small, text=muted] at (11.15,4.17) {2026.12--2027.01};
+    \node[small, text=muted] at (14.15,4.17) {2027.02--03};
+
+    \draw[bluearrow] (input.east) -- (s1.west);
+    \draw[bluearrow] (s1.east) -- (s2.west);
+    \draw[kvarrow] (s2.east) -- (s3.west);
+    \draw[greenarrow] (s3.east) -- (s4.west);
+
+    \node[cluster, minimum width=11.6cm, minimum height=1.7cm] (eval) at (9.65,2.15) {};
+    \node[font=\sffamily\bfseries\small] at (4.65,2.55) {统一评估};
+    \node[metric, fill=white, minimum width=3.15cm] at (6.95,2.55) {延迟：TTFT / TPOT / ITL};
+    \node[metric, fill=white, minimum width=3.35cm] at (10.35,2.55) {资源：显存峰值 / HBM 读写};
+    \node[metric, fill=white, minimum width=3.3cm] at (13.72,2.55) {系统：QPS / 负载均衡};
+    \node[metric, fill=white, minimum width=7.45cm] at (10.35,1.72) {补充指标：带宽利用率、KV 传输时间、layout 转换时间、输出一致性};
+
+    \draw[control] (s1.south) -- (eval.north -| s1.south);
+    \draw[control] (s2.south) -- (eval.north -| s2.south);
+    \draw[control] (s3.south) -- (eval.north -| s3.south);
+    \draw[control] (s4.south) -- (eval.north -| s4.south);
+    \draw[control] (eval.west) to[out=180,in=-90] node[label, left] {消融与回归} (s1.south);
+
+    \node[warnblock, minimum width=3.2cm, minimum height=4.7cm] (output) at (17.1,4.45) {};
+    \node[font=\sffamily\bfseries\small, text=accentLine] at (17.3,6.35) {预期产出};
+    \node[small] at (17.3,5.58) {昇腾 PD 分离\\KV 传输与转换方法};
+    \node[small] at (17.3,4.78) {Decode 动态 CP\\调度原型与实验};
+    \node[small] at (17.3,3.98) {DP 动态扩缩容\\TP 域 KV 去冗余};
+    \node[small] at (17.3,3.18) {论文图表、消融分析\\答辩材料};
+
+    \draw[orangearrow] (s4.east) -- (output.west);
+    \draw[orangearrow] (eval.east) to[out=0,in=-90] (output.south);
+\end{tikzpicture}
+\end{document}

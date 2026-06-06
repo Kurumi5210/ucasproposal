@@ -1,0 +1,62 @@
+\documentclass[border=6pt]{standalone}
+\input{Figures/proposal-figure-style.tex}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm]
+    \node[title] at (8.4,7.75) {昇腾长文本推理优化总体架构};
+    \node[subtitle] at (8.4,7.3) {围绕 PD 分离隔离阶段干扰，并用 PCP/DCP 与动态 CP 缓解长上下文带来的计算、显存和 HBM 访存瓶颈};
+
+    \node[block, minimum width=2.25cm, minimum height=1.0cm] (req) at (0.9,4.15) {长上下文\\请求流};
+    \node[warnblock, minimum width=2.3cm, minimum height=1.0cm] (sched) at (3.25,4.15) {入口调度\\P/D 路由};
+
+    \node[pblock, minimum width=4.6cm, minimum height=3.9cm, anchor=center] (pbox) at (6.6,4.25) {};
+    \node[font=\sffamily\bfseries\small, text=prefillLine] at (6.6,5.9) {Prefill 资源池};
+    \node[small, text=muted] at (6.6,5.52) {计算密集：长 prompt 编码、KV 生成、TTFT};
+    \foreach \i/\x in {0/5.35,1/6.18,2/7.02,3/7.85} {
+        \node[rank, fill=white] (p\i) at (\x,4.8) {P\i};
+    }
+    \node[metric, fill=prefill] at (5.8,3.95) {PCP\\序列切分};
+    \node[metric, fill=prefill] at (7.35,3.95) {高 TP/PP\\批量计算};
+    \node[metric, fill=white, minimum width=3.8cm] at (6.6,3.1) {目标：降低 TTFT，充分利用 AI Core};
+
+    \node[kvblock, minimum width=3.25cm, minimum height=3.2cm] (kvconn) at (10.65,4.25) {};
+    \node[font=\sffamily\bfseries\small, text=kvLine] at (10.65,5.35) {KV Connector};
+    \node[small] at (10.65,4.85) {rank/layer 映射};
+    \node[small] at (10.65,4.42) {KV 传输};
+    \node[small] at (10.65,3.99) {layout 转换};
+    \node[small] at (10.65,3.56) {PageAttention 写入};
+
+    \node[dblock, minimum width=4.9cm, minimum height=3.9cm] (dbox) at (14.75,4.25) {};
+    \node[font=\sffamily\bfseries\small, text=decodeLine] at (14.75,5.9) {Decode 资源池};
+    \node[small, text=muted] at (14.75,5.52) {访存密集：KV 读取、逐 token 生成、TPOT/ITL};
+    \foreach \i/\x in {0/13.25,1/14.25,2/15.25,3/16.25} {
+        \node[rank, fill=white] (d\i) at (\x,4.78) {D\i};
+    }
+    \node[metric, fill=decode] at (13.78,3.95) {DCP\\KV 分片};
+    \node[metric, fill=decode] at (15.75,3.95) {动态 CP\\跨 DP 协同};
+    \node[metric, fill=white, minimum width=4.05cm] at (14.75,3.1) {目标：降低 HBM 压力与尾部 ITL};
+
+    \node[block, minimum width=2.1cm, minimum height=1.0cm] (out) at (18.55,4.15) {输出\\token 流};
+
+    \draw[bluearrow] (req) -- node[label, above] {prompt} (sched);
+    \draw[bluearrow] (sched) -- node[label, above] {Prefill batch} (pbox.west);
+    \draw[kvarrow] (pbox.east) -- node[label, above] {KV Cache} (kvconn.west);
+    \draw[kvarrow] (kvconn.east) -- node[label, above] {本地 KV blocks} (dbox.west);
+    \draw[greenarrow] (dbox.east) -- node[label, above] {Decode} (out);
+
+    \node[cluster, minimum width=14.3cm, minimum height=1.1cm] (bottle) at (10.6,1.15) {};
+    \node[small, text=ink] at (4.2,1.15) {长上下文输入};
+    \node[small, text=ink] at (6.8,1.15) {Prefill 计算放大};
+    \node[small, text=ink] at (9.8,1.15) {KV 传输/重排};
+    \node[small, text=ink] at (12.95,1.15) {Decode HBM 访存};
+    \node[small, text=ink] at (16.05,1.15) {TTFT/TPOT/ITL 优化};
+    \draw[orangearrow] (5.25,1.15) -- (5.9,1.15);
+    \draw[orangearrow] (7.9,1.15) -- (8.7,1.15);
+    \draw[orangearrow] (11.05,1.15) -- (11.75,1.15);
+    \draw[orangearrow] (14.15,1.15) -- (15.0,1.15);
+
+    \node[vblock, minimum width=5.0cm, minimum height=0.75cm] (prof) at (10.65,6.55) {Profiling：HBM 读写、AI Core 利用率、KV 传输时间};
+    \draw[control] (prof.west) to[out=180,in=100] (sched.north);
+    \draw[control] (prof.east) to[out=0,in=90] (dbox.north);
+\end{tikzpicture}
+\end{document}
