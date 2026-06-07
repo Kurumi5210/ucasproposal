@@ -1,0 +1,118 @@
+\documentclass[border=6pt]{standalone}
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc,patterns,positioning}
+
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+\setCJKmainfont{SimHei}[AutoFakeBold=2.0]
+\setCJKsansfont{SimHei}[AutoFakeBold=2.0]
+
+\definecolor{ink}{HTML}{1F2937}
+\definecolor{muted}{HTML}{64748B}
+\definecolor{panel}{HTML}{F8FAFC}
+\definecolor{panelLine}{HTML}{CBD5E1}
+\definecolor{attention}{HTML}{D7EAF7}
+\definecolor{attentionLine}{HTML}{3B82B8}
+\definecolor{comm}{HTML}{F6D8C4}
+\definecolor{commLine}{HTML}{B35A20}
+\definecolor{moe}{HTML}{E7EEF7}
+\definecolor{moeLine}{HTML}{4A77A8}
+\definecolor{wait}{HTML}{F1F5F9}
+\definecolor{waitLine}{HTML}{94A3B8}
+\definecolor{longReq}{HTML}{EEF6FF}
+
+\tikzset{
+    every picture/.style={font=\sffamily},
+    lane/.style={draw=panelLine, line width=0.55pt},
+    dp/.style={font=\sffamily\bfseries\small, text=ink, align=center},
+    stage/.style={
+        rounded corners=2pt,
+        line width=0.8pt,
+        inner sep=0pt,
+        align=center,
+        font=\sffamily\scriptsize
+    },
+    attn/.style={stage, fill=attention, draw=attentionLine},
+    waitbar/.style={stage, fill=wait, draw=waitLine, dashed},
+    commbar/.style={stage, fill=comm, draw=commLine},
+    moeblock/.style={stage, fill=moe, draw=moeLine},
+    tag/.style={
+        rounded corners=2pt,
+        fill=panel,
+        draw=panelLine,
+        line width=0.5pt,
+        font=\sffamily\scriptsize,
+        text=muted,
+        inner xsep=5pt,
+        inner ysep=3pt
+    },
+    arrow/.style={-{Latex[length=2.8mm,width=1.9mm]}, draw=ink, line width=0.8pt}
+}
+
+\newcommand{\attnbar}[4]{%
+    \draw[attn] (#1,#2-0.25) rectangle (#3,#2+0.25);
+    \node[font=\sffamily\scriptsize, text=ink] at ({(#1+#3)/2},#2) {#4};
+}
+
+\newcommand{\waitspan}[3]{%
+    \draw[waitbar] (#1,#2-0.20) rectangle (#3,#2+0.20);
+}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm]
+    \foreach \name/\y in {DP0/4.60,DP1/3.75,DP2/2.90,DP3/2.05} {
+        \node[dp] at (0.55,\y) {\name};
+        \draw[lane] (1.05,\y) -- (17.85,\y);
+    }
+
+    \draw[rounded corners=3pt, draw=attentionLine, line width=0.55pt, fill=longReq] (1.08,2.55) rectangle (15.22,3.25);
+    \node[font=\sffamily\scriptsize, text=attentionLine] at (0.55,2.55) {long};
+
+    \attnbar{1.25}{4.60}{2.95}{short}
+    \attnbar{1.25}{3.75}{2.95}{short}
+    \attnbar{1.25}{2.90}{6.10}{long}
+    \attnbar{1.25}{2.05}{3.65}{short}
+
+    \waitspan{3.05}{4.60}{6.10}
+    \waitspan{3.05}{3.75}{6.10}
+    \waitspan{3.75}{2.05}{6.10}
+
+    \draw[commbar] (6.35,1.70) rectangle (6.70,4.95);
+    \node[font=\sffamily\scriptsize, rotate=90, text=ink] at (6.525,3.33) {A2A};
+    \draw[densely dashed, draw=commLine, line width=0.65pt] (6.10,1.60) -- (6.10,5.05);
+
+    \draw[moeblock] (7.05,1.70) rectangle (8.35,4.95);
+    \node[font=\sffamily\bfseries\small, text=ink] at (7.70,3.33) {MoE};
+
+    \draw[commbar] (8.70,1.70) rectangle (9.05,4.95);
+    \node[font=\sffamily\scriptsize, rotate=90, text=ink] at (8.875,3.33) {A2A};
+
+    \attnbar{9.55}{4.60}{11.20}{short}
+    \attnbar{9.55}{3.75}{11.20}{short}
+    \attnbar{9.55}{2.90}{15.15}{long}
+    \attnbar{9.55}{2.05}{12.05}{short}
+
+    \waitspan{11.30}{4.60}{15.15}
+    \waitspan{11.30}{3.75}{15.15}
+    \waitspan{12.15}{2.05}{15.15}
+
+    \draw[commbar] (15.40,1.70) rectangle (15.75,4.95);
+    \node[font=\sffamily\scriptsize, rotate=90, text=ink] at (15.575,3.33) {A2A};
+    \draw[densely dashed, draw=commLine, line width=0.65pt] (15.15,1.60) -- (15.15,5.05);
+
+    \draw[moeblock] (16.10,1.70) rectangle (17.40,4.95);
+    \node[font=\sffamily\bfseries\small, text=ink] at (16.75,3.33) {MoE};
+
+    \draw[arrow] (1.05,1.15) -- (17.85,1.15);
+    \node[font=\sffamily\scriptsize, text=muted] at (17.55,0.82) {time};
+
+    \node[tag, fill=attention, draw=attentionLine, text=ink] at (10.25,0.62) {Attention};
+    \node[tag, fill=wait, draw=waitLine, text=ink] at (12.05,0.62) {Wait};
+    \node[tag, fill=comm, draw=commLine, text=ink] at (13.55,0.62) {A2A};
+    \node[tag, fill=moe, draw=moeLine, text=ink] at (15.25,0.62) {MoE};
+
+\end{tikzpicture}
+\end{document}

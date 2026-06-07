@@ -1,0 +1,57 @@
+%---------------------------------------------------------------------------%
+%->> Reshape kernel latency benchmark
+%---------------------------------------------------------------------------%
+\providecolor{reshapeAxis}{HTML}{333333}
+\providecolor{reshapeGrid}{HTML}{D8D8D8}
+\providecolor{reshapeText}{HTML}{111111}
+\providecolor{reshapeMuted}{HTML}{666666}
+
+\begin{tikzpicture}[
+    x=1cm,
+    y=1cm,
+    axis/.style={reshapeAxis,line width=0.55pt},
+    grid/.style={reshapeGrid,line width=0.30pt},
+    tick/.style={font=\footnotesize,text=reshapeMuted},
+    label/.style={font=\footnotesize,text=reshapeText,align=right},
+    value/.style={font=\footnotesize,text=reshapeText},
+]
+\def\xorigin{5.00}
+\def\yorigin{0.35}
+\def\xscale{0.13}
+\def\xmax{55}
+\def\barheight{0.18}
+\def\ytorch{1.35}
+\def\ynpu{0.72}
+\pgfmathsetmacro{\xright}{\xorigin+\xmax*\xscale}
+\pgfmathsetmacro{\xlabel}{\xorigin+25*\xscale}
+
+% x-axis, grid lines, and tick labels
+\foreach \t in {0,10,20,30,40,50} {
+    \pgfmathsetmacro{\xtick}{\xorigin+\t*\xscale}
+    \draw[grid] (\xtick,\yorigin) -- (\xtick,1.62);
+    \draw[axis] (\xtick,\yorigin) -- (\xtick,\yorigin-0.05);
+    \node[tick,anchor=north] at (\xtick,\yorigin-0.12) {\t};
+}
+\draw[axis] (\xorigin,\yorigin) -- (\xright,\yorigin);
+\draw[axis] (\xorigin,\yorigin) -- (\xorigin,1.62);
+\node[tick,anchor=north] at (\xlabel,\yorigin-0.46) {Latency (ms)};
+
+% bars
+\pgfmathsetmacro{\xtorch}{\xorigin+50*\xscale}
+\pgfmathsetmacro{\xnpu}{\xorigin+7*\xscale}
+\filldraw[draw=reshapeAxis,fill=black!30,line width=0.45pt]
+    (\xorigin,\ytorch-\barheight) rectangle (\xtorch,\ytorch+\barheight);
+\filldraw[draw=reshapeAxis,fill=black!82,line width=0.45pt]
+    (\xorigin,\ynpu-\barheight) rectangle (\xnpu,\ynpu+\barheight);
+
+% value labels
+\node[value,anchor=west] at (\xtorch+0.14,\ytorch) {50 ms};
+\node[value,anchor=west] at (\xnpu+0.14,\ynpu) {7 ms};
+
+% method labels
+\node[label,anchor=east] at (\xorigin-0.25,\ytorch) {torch reshape};
+\node[label,anchor=east] at (\xorigin-0.25,\ynpu) {\texttt{\_npu\_reshape\_and\_cache}};
+
+\node[tick,anchor=east] at (\xright,1.86) {Speedup: $\sim 7\times$};
+\end{tikzpicture}
+%---------------------------------------------------------------------------%
