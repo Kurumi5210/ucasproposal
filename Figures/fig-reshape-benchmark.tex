@@ -1,57 +1,71 @@
 %---------------------------------------------------------------------------%
-%->> Reshape kernel latency benchmark
+%->> GQA KV resharding latency benchmark
 %---------------------------------------------------------------------------%
-\providecolor{reshapeAxis}{HTML}{333333}
-\providecolor{reshapeGrid}{HTML}{D8D8D8}
-\providecolor{reshapeText}{HTML}{111111}
-\providecolor{reshapeMuted}{HTML}{666666}
+\providecolor{benchAxis}{HTML}{222222}
+\providecolor{benchGrid}{HTML}{D8DDE3}
+\providecolor{benchTorch}{HTML}{C9D3DF}
+\providecolor{benchNpu}{HTML}{2F3A40}
 
 \begin{tikzpicture}[
     x=1cm,
     y=1cm,
-    axis/.style={reshapeAxis,line width=0.55pt},
-    grid/.style={reshapeGrid,line width=0.30pt},
-    tick/.style={font=\footnotesize,text=reshapeMuted},
-    label/.style={font=\footnotesize,text=reshapeText,align=right},
-    value/.style={font=\footnotesize,text=reshapeText},
+    axis/.style={benchAxis,line width=0.55pt},
+    grid/.style={benchGrid,line width=0.35pt},
+    tick/.style={font=\footnotesize,text=benchAxis},
+    ylabel/.style={font=\footnotesize,text=benchAxis,align=right},
+    value/.style={font=\footnotesize,text=benchAxis},
 ]
-\def\xorigin{5.00}
+\def\xorigin{2.35}
 \def\yorigin{0.35}
-\def\xscale{0.13}
-\def\xmax{55}
-\def\barheight{0.18}
-\def\ytorch{1.35}
-\def\ynpu{0.72}
-\pgfmathsetmacro{\xright}{\xorigin+\xmax*\xscale}
-\pgfmathsetmacro{\xlabel}{\xorigin+25*\xscale}
+\def\xscale{0.052}
+\def\xmax{170}
+\def\barheight{0.22}
+\def\ytorch{1.80}
+\def\ynpu{0.92}
 
-% x-axis, grid lines, and tick labels
-\foreach \t in {0,10,20,30,40,50} {
+\pgfmathsetmacro{\xright}{\xorigin+\xmax*\xscale}
+\pgfmathsetmacro{\xlabel}{\xorigin+85*\xscale}
+\pgfmathsetmacro{\xtorch}{\xorigin+155.93*\xscale}
+\pgfmathsetmacro{\xnpu}{\xorigin+5.56*\xscale}
+\pgfmathsetmacro{\xtorchstdleft}{\xorigin+(155.93-5.17)*\xscale}
+\pgfmathsetmacro{\xtorchstdright}{\xorigin+(155.93+5.17)*\xscale}
+\pgfmathsetmacro{\xnpustdleft}{\xorigin+(5.56-1.71)*\xscale}
+\pgfmathsetmacro{\xnpustdright}{\xorigin+(5.56+1.71)*\xscale}
+
+\path[use as bounding box] (0.00,-0.25) rectangle (11.25,2.25);
+
+% Axis and grid
+\foreach \t in {0,40,80,120,160} {
     \pgfmathsetmacro{\xtick}{\xorigin+\t*\xscale}
-    \draw[grid] (\xtick,\yorigin) -- (\xtick,1.62);
+    \draw[grid] (\xtick,\yorigin) -- (\xtick,2.08);
     \draw[axis] (\xtick,\yorigin) -- (\xtick,\yorigin-0.05);
-    \node[tick,anchor=north] at (\xtick,\yorigin-0.12) {\t};
+    \node[tick,anchor=north] at (\xtick,\yorigin-0.11) {\t};
 }
 \draw[axis] (\xorigin,\yorigin) -- (\xright,\yorigin);
-\draw[axis] (\xorigin,\yorigin) -- (\xorigin,1.62);
-\node[tick,anchor=north] at (\xlabel,\yorigin-0.46) {Latency (ms)};
+\draw[axis] (\xorigin,\yorigin) -- (\xorigin,2.08);
+\node[tick,anchor=north] at (\xlabel,\yorigin-0.43) {Latency (ms)};
 
-% bars
-\pgfmathsetmacro{\xtorch}{\xorigin+50*\xscale}
-\pgfmathsetmacro{\xnpu}{\xorigin+7*\xscale}
-\filldraw[draw=reshapeAxis,fill=black!30,line width=0.45pt]
+% Bars
+\filldraw[draw=benchAxis,fill=benchTorch,line width=0.45pt]
     (\xorigin,\ytorch-\barheight) rectangle (\xtorch,\ytorch+\barheight);
-\filldraw[draw=reshapeAxis,fill=black!82,line width=0.45pt]
+\filldraw[draw=benchAxis,fill=benchNpu,line width=0.45pt]
     (\xorigin,\ynpu-\barheight) rectangle (\xnpu,\ynpu+\barheight);
 
-% value labels
-\node[value,anchor=west] at (\xtorch+0.14,\ytorch) {50 ms};
-\node[value,anchor=west] at (\xnpu+0.14,\ynpu) {7 ms};
+% Standard deviation bars
+\draw[axis] (\xtorchstdleft,\ytorch) -- (\xtorchstdright,\ytorch);
+\draw[axis] (\xtorchstdleft,\ytorch-0.08) -- (\xtorchstdleft,\ytorch+0.08);
+\draw[axis] (\xtorchstdright,\ytorch-0.08) -- (\xtorchstdright,\ytorch+0.08);
+\draw[axis] (\xnpustdleft,\ynpu) -- (\xnpustdright,\ynpu);
+\draw[axis] (\xnpustdleft,\ynpu-0.08) -- (\xnpustdleft,\ynpu+0.08);
+\draw[axis] (\xnpustdright,\ynpu-0.08) -- (\xnpustdright,\ynpu+0.08);
 
-% method labels
-\node[label,anchor=east] at (\xorigin-0.25,\ytorch) {torch reshape};
-\node[label,anchor=east] at (\xorigin-0.25,\ynpu) {\texttt{\_npu\_reshape\_and\_cache}};
+% Labels and values
+\node[ylabel,anchor=east] at (\xorigin-0.25,\ytorch) {torch};
+\node[ylabel,anchor=east] at (\xorigin-0.25,\ynpu) {NPU fused};
+\node[value,anchor=west] at (\xorigin+0.35,\ytorch)
+    {155.93 $\pm$ 5.17 ms};
+\node[value,anchor=west] at (\xorigin+0.45,\ynpu)
+    {5.56 $\pm$ 1.71 ms};
 
-\node[tick,anchor=east] at (\xright,1.86) {Speedup: $\sim 7\times$};
 \end{tikzpicture}
 %---------------------------------------------------------------------------%
