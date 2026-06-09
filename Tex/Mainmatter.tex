@@ -14,7 +14,9 @@ Prefill-Decode 分离（PD 分离）正是针对上述问题提出的系统优�
 
 与此同时，即使采用 PD 分离，超长 prompt 的 Prefill 仍可能在单个并行组内产生很高的 TTFT，Decode 阶段随上下文增长也受 KV Cache 容量的限制。上下文并行（Context Parallelism，简称 CP）沿序列维度切分输入或 KV Cache，是解决长序列瓶颈的另一关键技术：Prefill Context Parallelism（PCP）将长输入切分到多设备并行以降低 TTFT；Decode Context Parallelism（DCP）将 KV Cache 按序列维度分片，减少冗余存储。
 
-从硬件特征看，长文本推理优化还必须考虑不同加速器的计算/访存能力配比。昇腾 910 系列的 FP16 峰值算力与 HBM 带宽之比约为同代 NVIDIA GPU 的 1.5--2 倍，这意味着每单位 HBM 带宽需要支撑更多的计算操作，访存更容易成为系统瓶颈。这一差异在长上下文 Decode 阶段尤为关键。Decode 阶段每生成一个 token，需要从 HBM 读取模型权重（约 $2\times$ 参数量字节）和该请求的完整 KV Cache（约 $2 \times n_\text{layers} \times L \times n_\text{kv\_heads} \times d_\text{head}$ 字节，其中 $L$ 为当前上下文长度）。当 $L$ 增长至 128K 乃至 1M，KV Cache 读取量远超权重读取量，成为 HBM 访问的主导成分；此时昇腾高计算/访存比导致计算单元等待数据的时间占比更高，算力利用率更低。相比之下，Prefill 阶段以批量矩阵乘法为主，单次加载权重后可在大量 token 上复用计算，计算/访存比高的优势得以发挥。因此，昇腾长文本推理的瓶颈呈现出“Prefill 偏计算、Decode 偏访存”的两极分化，且上下文越长分化越剧烈。面向昇腾的优化需要因阶段施策：P 侧利用高算力加速长 prompt 的批量 Prefill 计算，D 侧则必须以削减 KV Cache 访存和 HBM 带宽压力为首要目标——通过 PD 分离隔离两阶段干扰，通过 PCP/DCP 沿序列维度分摊或去冗余 KV 存储，通过动态 CP 将超长请求的 KV 读取压力分散到多个设备。后续实验将通过 HBM 读写量、AI Core 利用率和 TTFT/TPOT 分解，量化昇腾与 NVIDIA 平台在长文本 Decode 瓶颈上的结构性差异。
+从硬件特征看，长文本推理优化还必须考虑不同加速器的计算/访存能力配比。昇腾 910 系列的 FP16 峰值算力与 HBM 带宽之比约为同代 NVIDIA GPU 的 1.5--2 倍，这意味着每单位 HBM 带宽需要支撑更多的计算操作，访存更容易成为系统瓶颈。这一差异在长上下文 Decode 阶段尤为关键。Decode 阶段每生成一个 token，需要从 HBM 读取模型权重（约 $2\times$ 参数量字节）和该请求的完整 KV Cache（约 $2 \times n_\text{layers} \times L \times n_\text{kv\_heads} \times d_\text{head}$ 字节，其中 $L$ 为当前上下文长度）。当 $L$ 增长至 128K 乃至 1M，KV Cache 读取量远超权重读取量，成为 HBM 访问的主导成分；此时昇腾高计算/访存比导致计算单元等待数据的时间占比更高，算力利用率更低。相比之下，Prefill 阶段以批量矩阵乘法为主，单次加载权重后可在大量 token 上复用计算，计算/访存比高的优势得以发挥。因此，昇腾长文本推理的瓶颈呈现出”Prefill 偏计算、Decode 偏访存”的两极分化，且上下文越长分化越剧烈。
+
+面向昇腾的优化需要因阶段施策：P 侧利用高算力加速长 prompt 的批量 Prefill 计算，D 侧则必须以削减 KV Cache 访存和 HBM 带宽压力为首要目标——通过 PD 分离隔离两阶段干扰，通过 PCP/DCP 沿序列维度分摊或去冗余 KV 存储，通过动态 CP 将超长请求的 KV 读取压力分散到多个设备。后续实验将通过 HBM 读写量、AI Core 利用率和 TTFT/TPOT 分解，量化昇腾与 NVIDIA 平台在长文本 Decode 瓶颈上的结构性差异。
 
 \begin{figure}[htbp]
     \centering
@@ -33,7 +35,7 @@ Prefill-Decode 分离（PD 分离）正是针对上述问题提出的系统优�
 
 第三，CP 并行度的运行时自适应问题。现有 CP 方案中 PCP 度和 DCP/跨 DP CP 度通常是静态配置的——P 侧对所有 prompt 使用统一的 PCP 度，D 侧对所有请求使用统一的 CP 度。然而真实负载中 prompt 长度差异悬殊（从 4K 到 1M），短 prompt 不需要 PCP 并行即可满足 TTFT SLO，但超长 prompt 若不在多卡上沿序列切分 Prefill 计算，TTFT 将远超 SLO；D 侧短请求不需要跨 DP 协同即可满足 TPOT SLO，但长请求的 KV 访存压力需通过多副本分摊。如何在 PD 分离架构下实现 P/D 两侧的运行时动态 CP 度选择，使得 CP 度随请求特征自适应调节，同时保证 PCP 分片后的 KV Cache 能经由 PD Connector 正确高效地交付 D 侧，是全链路并行度自适应的关键问题。
 
-因此，本课题围绕上述三个问题展开研究：首先构建 PD Connector 打通 P/D 间的 KV Cache 正确传输（传输正确性），然后设计中心化调度 vLLM 框架实现 min(KV usage) 负载均衡（单副本调度效率），最后实现跨 DP 协同执行机制与 P/D 两侧动态 CP 调度（跨副本并行度自适应），逐层推进。
+因此，本课题围绕上述三个问题展开研究：首先构建 PD Connector 打通 P/D 间的 KV Cache 正确传输（传输正确性），然后设计中心化调度 vLLM 框架实现 min(KV usage) 负载均衡——将每个请求调度到 KV 压力最小的单个 DP 副本上执行（单请求单副本调度），最后实现跨 DP 协同执行机制与 P/D 两侧动态 CP 调度——将超长请求的 KV Cache 分片到多个 DP 副本上协同计算（跨副本并行度自适应），三个层次逐层推进。
 
 \subsection{选题意义}
 
@@ -43,7 +45,7 @@ Prefill-Decode 分离（PD 分离）正是针对上述问题提出的系统优�
 
 因此，本课题拟围绕长文本推理中的两个核心瓶颈展开：其一，研究昇腾 PD 分离架构下 P 实例与 D 实例的资源配比、并行策略和 KV Cache 传输机制，使计算密集型 Prefill 尽可能消化昇腾高算力，使访存密集型 Decode 尽可能减少 HBM/KV 访问放大；其二，研究 CP 并行在 Prefill 和 Decode 阶段的适用方式，将长上下文沿序列维度分摊到多张昇腾设备上，缓解单设备显存与时延瓶颈。通过二者协同，有望在保证模型推理准确性的前提下，同时改善长文本场景下的 TTFT、TPOT、系统吞吐、显存利用率和服务稳定性。
 
-本课题的优化路径围绕昇腾平台特有的瓶颈坐标系展开：横轴为上下文长度，决定 KV Cache 规模和访存压力；纵轴为阶段特征，Prefill 偏计算、Decode 偏访存；深度轴为硬件能力配比——昇腾高计算/访存比和相对较小的 HBM 容量使前两个维度的矛盾在长文本场景下剧烈放大。后续三个研究点分别对应 PD Connector（传输效率）、中心化调度框架（调度效率）和动态 CP 调度（并行度自适应）三个层次。
+本课题的优化路径围绕昇腾平台特有的瓶颈坐标系展开：横轴为上下文长度，决定 KV Cache 规模和访存压力；纵轴为阶段特征，Prefill 偏计算、Decode 偏访存；深度轴为硬件能力配比——昇腾高计算/访存比和相对较小的 HBM 容量使前两个维度的矛盾在长文本场景下剧烈放大。后续三个研究点分别对应 PD Connector（传输效率）、中心化调度框架（调度效率）和动态 CP 调度（并行度自适应）三个层次。此外，P/D 资源配比（P 实例与 D 实例的数量比及各自的并行配置）直接影响 PD 分离的端到端收益，但其最优值受模型结构、上下文长度分布和硬件拓扑共同影响，难以作为独立研究问题求解；本课题将其作为实验参数，在不同 P/D 配比下评估三个研究点的优化效果，并在实验方案中给出经验性配比建议。
 
 \section{国内外本学科领域的发展现状与趋势}
 
@@ -57,7 +59,7 @@ Prefill-Decode 分离（PD 分离）正是针对上述问题提出的系统优�
 
 国际上，PD 分离的思想首先由一系列工作系统化提出。Splitwise 最早指出 Prefill 和 Decode 分别呈现计算密集和访存密集特征，可部署在不同类型设备上\citep{patel2023splitwise}。DistServe 将其发展为面向 SLO 的系统架构，将两阶段分配到不同 GPU，分别针对 TTFT 和 TPOT 约束进行资源和并行策略协同优化，并考虑阶段间 KV Cache 传输带宽\citep{zhong2024distserve}。Mooncake 进一步从 KV Cache 视角构建分离式架构，利用 GPU 集群中未充分使用的 CPU、DRAM、SSD 等资源构建分层 KV Cache 存储，将 KV Cache 的生成、传输、缓存和调度纳入系统设计\citep{qin2024mooncake}——该工作表明长文本下 PD 分离的瓶颈会从计算迁移到 KV Cache 生命周期管理。开源推理框架方面，vLLM 已集成 disaggregated prefilling，vLLM-Ascend 进一步支持基于 Mooncake 的 PD 分离方案，包括 MooncakeConnector 和 MooncakeLayerwiseConnector\citep{vllmascendpd2026,vllmascenddeepseekpd2026}。国内方面，昇腾 MindIE 将 PD 分离作为关键特性，与 Continuous Batching、Page Attention、FlashDecoding 等机制协同使用；昇腾大规模专家并行方案将 P 和 D 部署在不同服务器上，通过高速互联传输 KV Cache，官方技术文章明确指出了混合部署下资源利用不足和阶段间干扰问题\citep{mindie2026,ascendpd2025,ascendexpert2026}。
 
-总体来看，PD 分离已形成较清晰的技术共识：Prefill 和 Decode 具有不同资源特征，应在系统层面解耦。但现有研究在昇腾平台适配方面存在明显不足。首先，现有工作主要基于 NVIDIA GPU 和 CUDA 生态，其通信原语和缓存布局与昇腾平台差异显著。其次，PD 分离会引入额外 KV Cache 传输成本，当输入长度、P/D 比例或网络带宽变化时收益并不稳定，而昇腾高计算/访存比会进一步放大 KV 传输和 D 侧访存之间的压力耦合。当 D 侧的 KV Cache 拉取、layout 重排和 PageAttention 访问缺乏针对性优化时，昇腾有限的 HBM 带宽将同时承受三方面压力，P 侧节省的 TTFT 可能被 D 侧 TPOT 抖动完全抵消。更进一步，在 TP 异构场景下，P 侧生成的 KV Cache 布局与 D 侧 PageAttention 所需布局可能不一致（如 GQA 模型 KV head 随 TP rank 切分、PP 场景下层划分），PD 分离还需要处理 TP/PP 异构下的布局映射和运行时执行模式与通信路径之间的耦合。本文作者在昇腾框架适配过程中发现，vLLM-Ascend 的 MooncakeConnector 在处理 P/D 侧 TP 异构的 GQA/MHA 模型时，默认的 KV Cache 拉取路径不做 head 级别的重排序，直接导致推理精度异常；PP 与 MTP 的层切分冲突也是框架实现未覆盖的边界情况。因此，昇腾上的 PD 分离需要将阶段解耦、KV 传输、布局转换、通信拓扑和访存瓶颈作为整体来优化。
+总体来看，PD 分离已形成较清晰的技术共识：Prefill 和 Decode 具有不同资源特征，应在系统层面解耦。但现有研究在昇腾平台适配方面存在明显不足。首先，现有工作主要基于 NVIDIA GPU 和 CUDA 生态，其通信原语和缓存布局与昇腾平台差异显著。其次，PD 分离会引入额外 KV Cache 传输成本，当输入长度、P/D 比例或网络带宽变化时收益并不稳定，而昇腾高计算/访存比会进一步放大 KV 传输和 D 侧访存之间的压力耦合——当 D 侧的 KV Cache 拉取、layout 重排和 PageAttention 访问缺乏针对性优化时，昇腾有限的 HBM 带宽将同时承受三方面压力，P 侧节省的 TTFT 可能被 D 侧 TPOT 抖动完全抵消。再者，在 TP 异构场景下，P 侧生成的 KV Cache 布局与 D 侧 PageAttention 所需布局可能不一致：对于 GQA/MHA 模型，KV head 随 TP rank 切分，D 侧若按默认路径拉取 KV Cache 将出现 KV head 缺失或顺序错误；PP 场景下层划分关系进一步复杂化，框架现有实现尚未覆盖 PP 与 MTP 的层切分冲突。因此，昇腾上的 PD 分离需要将阶段解耦、KV 传输、布局转换、通信拓扑和访存瓶颈作为整体来优化。
 
 \subsection{上下文并行研究现状}
 
@@ -67,7 +69,7 @@ Ring Attention 是上下文并行方向的代表性工作之一。该方法采�
 
 DeepSpeed-Ulysses 则从另一条路径推动了序列并行发展。它通过沿序列维度切分输入，并利用 all-to-all 通信在注意力头维度和序列维度之间重排数据，从而支持极长序列 Transformer 训练\citep{jacobs2023deepspeedulysses}。Ulysses 方案在部分模型结构和网络条件下具有较高效率，但对 attention head 数量与并行度的可整除关系存在约束。后续 USP 等工作尝试统一 Ulysses 和 Ring Attention 两类方案，结合二者在通信模式、模型适配性和拓扑适配性上的优缺点，形成更通用的长序列并行方法\citep{fang2024usp}。昇腾 MindSpeed 的 Hybrid 长序列并行也采用融合 Ulysses 与 Ring Attention 的思路，以缓解单一方案在 GQA/MQA 模型和小序列块场景中的局限。
 
-面向推理场景，Context Parallelism for Scalable Million-Token Inference 将 CP 明确用于长上下文大模型推理，并设计了 pass-KV 和 pass-Q 等精确 ring attention 变体，覆盖 full prefill、persistent KV prefill 和 decode 等用例\citep{zhong2024contextparallelism}。该工作在多节点 H100 集群上展示了长上下文 Prefill 的近线性扩展能力，说明 CP 不仅适用于训练，也可以成为长文本在线推理降低 TTFT 的关键手段。与此同时，Mnemosyne 等工作也围绕百万级上下文推理提出自适应 chunking、Sequence Pipeline Parallelism 和 KV Cache Parallelism 等策略，反映出长上下文推理正在从“能否放下”转向“能否高效服务”。
+面向推理场景，Context Parallelism for Scalable Million-Token Inference 将 CP 明确用于长上下文大模型推理，并设计了 pass-KV 和 pass-Q 等精确 ring attention 变体，覆盖 full prefill、persistent KV prefill 和 decode 等用例\citep{zhong2024contextparallelism}。该工作在多节点 H100 集群上展示了长上下文 Prefill 的近线性扩展能力，说明 CP 不仅适用于训练，也可以成为长文本在线推理降低 TTFT 的关键手段。与此同时，Mnemosyne 等工作也围绕百万级上下文推理提出自适应 chunking、Sequence Pipeline Parallelism 和 KV Cache Parallelism 等策略\citep{agrawal2024mnemosyne}，反映出长上下文推理正在从”能否放下”转向”能否高效服务”。
 
 在昇腾生态中，vLLM-Ascend 已经提供 Context Parallel 支持，并将其划分为 PCP 和 DCP 两类。官方文档中，PCP 通过在 Prefill 阶段划分序列维度，让不同设备并行计算不同序列块，以降低长上下文请求的 TTFT；DCP 则在 Decode 阶段沿序列维度分片 KV Cache，减少 TP 域内的 KV 冗余存储，为更大 batch size 和更长上下文提供显存空间\citep{vllmascendcp2026}。vLLM-Ascend 文档还指出，CP 可以与 eager 模式、图模式、prefix cache、chunked prefill、MTP、PD 分离和 MLAPO 等功能协同使用。在官方 Ascend 910C/A3 环境示例中，DeepSeek-R1-W8A8 的 128K 输入在引入 PCP 后 TTFT 从 73.2s 降至 46.0s，Qwen3-235B 的 120K 输入 TTFT 从 33.9s 降至 22.7s，说明 CP 在昇腾长文本推理中已经具备实际优化价值。
 
@@ -75,13 +77,15 @@ CP 的工程实现还需要处理更细粒度的元数据和通信组问题\cite
 
 在此基础上，Dynamic Context Parallelism RFC \citep{vllmdynamiccp2025} 提出 request-level heterogeneous parallelism：短请求走常规 DP-attention 路径（CP=1），长请求由多个 DP-attention 副本协同执行（CP>1），通过 Domain 抽象和跨 DP 调度解决长短请求混部下的负载倾斜问题。该方向表明，CP 的研究重点正在从“能否切分长序列”转向“如何在真实负载中动态分配注意力计算和通信资源”。
 
-不过，CP 在实际系统中也引入了新的复杂性。首先，CP 会改变 KV Cache 的存储与访问方式，需要 block table、slot mapping、cache interleave size 等机制配合；当 CP 与 PD 分离同时使用时，还必须考虑跨 P/D 节点的 KV Cache 传输格式和切分方式。其次，PCP 和 DCP 的收益并不对称：PCP 主要降低长 prompt 的 TTFT，而 DCP 主要节省 Decode 阶段 KV Cache 显存并提高 batch 能力，但也可能带来额外通信和小算子开销。再次，CP 与 TP、EP、DP、MoE、量化、图模式、prefix cache 等功能之间存在组合约束，尤其是在昇腾平台上需要满足具体算子、通信域和部署拓扑要求。然而，在昇腾平台上，DCP 的收益不仅体现在显存节省，更体现在 Decode 访存压力的削减。由于昇腾高计算/访存比放大了每次 Decode step 中 KV Cache 遍历的 HBM 带宽压力（前述 $L$ 越大、压力越大），将 KV Cache 按序列维度分片后，每个设备仅需访问其负责分片对应的 KV 数据，HBM 读取量随 CP 度近似线性下降。因此，DCP 在昇腾长上下文 Decode 中的作用不仅是“省显存”，更是“降访存”——用可控的跨卡通信换取 HBM 带宽压力的缓解，而这恰恰是对昇腾高计算/访存比短板的对症下药。由此引出一个新问题：如何根据请求的上下文长度在线选择 CP 度，使得 KV 访存压力、跨卡通信开销和显存占用三者之间取得平衡？
+不过，CP 在实际系统中也引入了新的复杂性。首先，CP 会改变 KV Cache 的存储与访问方式，需要 block table、slot mapping、cache interleave size 等机制配合；当 CP 与 PD 分离同时使用时，还必须考虑跨 P/D 节点的 KV Cache 传输格式和切分方式。其次，PCP 和 DCP 的收益并不对称：PCP 主要降低长 prompt 的 TTFT，而 DCP 主要节省 Decode 阶段 KV Cache 显存并提高 batch 能力，但也可能带来额外通信和小算子开销。再次，CP 与 TP、EP、DP、MoE、量化、图模式、prefix cache 等功能之间存在组合约束，尤其是在昇腾平台上需要满足具体算子、通信域和部署拓扑要求。
+
+在昇腾平台上，DCP 的收益不仅体现在显存节省，更体现在 Decode 访存压力的削减。由于昇腾高计算/访存比放大了每次 Decode step 中 KV Cache 遍历的 HBM 带宽压力（前述 $L$ 越大、压力越大），将 KV Cache 按序列维度分片后，每个设备仅需访问其负责分片对应的 KV 数据，HBM 读取量随 CP 度近似线性下降。因此，DCP 在昇腾长上下文 Decode 中的作用不仅是”省显存”，更是”降访存”——用可控的跨卡通信换取 HBM 带宽压力的缓解，而这恰恰是对昇腾高计算/访存比短板的对症下药。由此引出一个新问题：如何根据请求的上下文长度在线选择 CP 度，使得 KV 访存压力、跨卡通信开销和显存占用三者之间取得平衡？
 
 \section{课题主要研究内容、预期目标}
 
 \subsection{课题主要研究内容}
 
-本课题围绕三个递进的研究点展开：首先构建 PD Connector，实现 PD 分离下 KV Cache 从 P 节点到 D 节点的正确传输与布局适配（传输基础设施）；然后在 Decode 节点上设计中心化调度框架，以中心化调度器和 min(KV usage) 策略实现单副本负载均衡（单副本调度）；最后实现跨 DP 协同执行机制与 P/D 两侧动态 CP 调度，使 CP 度随请求特征自适应调节（跨副本并行与自适应）。三个研究点从“能传”到“单副本能调度”再到“跨副本能自适应”，逐层推进。
+本课题围绕三个递进的研究点展开：首先构建 PD Connector，实现 PD 分离下 KV Cache 从 P 节点到 D 节点的正确传输与布局适配（传输基础设施）；然后在 Decode 节点上设计中心化调度框架，以中心化调度器和 min(KV usage) 策略将每个请求调度到单个最轻载的 DP 副本（单请求单副本负载均衡）；最后实现跨 DP 协同执行机制与 P/D 两侧动态 CP 调度，将超长请求的 KV Cache 分片到多个副本上协同计算（跨副本并行度自适应）。三个研究点从”能传”到”选哪个副本传”再到”跨几个副本协同”，逐层推进。
 
 \subsubsection{PD Connector：面向昇腾 PD 分离的 KV Cache 传输与布局适配}
 
@@ -109,7 +113,9 @@ PD 分离要求 Prefill 节点在完成长上下文计算后，将 KV Cache 交�
 
 本研究点基于 vLLM 设计中心化调度框架，其核心是一个中心化的调度器（CentralizedScheduler），调度策略为 min(KV usage) DPLB（DP Load Balancing）。调度器维护所有 DP 副本的 KV Cache 使用量（以占用 block 数或字节数计量），对新到达的 Decode 请求，选择当前 KV usage 最小的 DP 副本作为执行目标。选择 min(KV usage) 作为 DPLB 策略的依据是：在昇腾平台上，KV Cache 访问量直接决定每个 Decode step 的 HBM 读取时间和 ITL，KV usage 越高则 Decode 延迟越长；均衡各副本的 KV usage 等价于均衡各副本的 Decode 延迟，从而消除访存 straggler。
 
-中心化调度框架的设计要点如下。（1）Domain：将一组 DP-attention 副本组织为 DPLB 调度域。CentralizedScheduler 在每个 Domain 内以 min(KV usage) 为主策略进行请求分发，以 batch 均衡为辅助约束避免单副本 batch 堆积。（2）KV usage 感知与更新：每个 DP 副本向 CentralizedScheduler 上报其 KV Cache 占用的 block 数。该计数通过 block table 的已分配量即可获取，无需额外遍历 HBM。调度器在请求分配时递增目标副本的 KV usage 估值，在请求完成、KV Cache 释放时递减，维持各副本 KV usage 视图的准确性。（3）请求分发流程：新请求到达 → CentralizedScheduler 查询各副本 KV usage → 选择 KV usage 最小的副本 → 将请求下发至该副本执行 Decode → 请求完成后更新该副本的 KV usage。该流程的关键路径仅涉及 KV usage 的查询与数值比较，延迟在微秒级，不构成调度瓶颈。为建立 Decode 侧负载均衡的实验基线，前期基于 DeepSeek-V2-Lite 采集了静态 DP 与静态 DCP 的 P90 TPOT 和 P90 ITL 数据。图~\ref{fig:dp-dcp-long-context} 汇总 4K 基线负载以及 1\% 128K、1\% 256K、1\% 512K 和 1\% 1M 长请求混部负载下的 DP/DCP 延迟曲线，展示二者随请求速率和长请求上下文长度变化的尾部延迟差异。在此基础上，后续工作将实现 min(KV usage) DPLB 调度器原型，并评估不同 Domain 规模和负载模式下的负载均衡效果与调度开销。
+中心化调度框架的设计要点如下。（1）Domain：将一组 DP-attention 副本组织为 DPLB 调度域。CentralizedScheduler 在每个 Domain 内以 min(KV usage) 为主策略进行请求分发，以 batch 均衡为辅助约束避免单副本 batch 堆积。（2）KV usage 感知与更新：每个 DP 副本向 CentralizedScheduler 上报其 KV Cache 占用的 block 数。该计数通过 block table 的已分配量即可获取，无需额外遍历 HBM。调度器在请求分配时递增目标副本的 KV usage 估值，在请求完成、KV Cache 释放时递减，维持各副本 KV usage 视图的准确性。（3）请求分发流程：新请求到达 → CentralizedScheduler 查询各副本 KV usage → 选择 KV usage 最小的副本 → 将请求下发至该副本执行 Decode → 请求完成后更新该副本的 KV usage。该流程的关键路径仅涉及 KV usage 的查询与数值比较，延迟在微秒级，不构成调度瓶颈。
+
+为建立 Decode 侧负载均衡的实验基线并论证动态 CP 的必要性，前期基于 DeepSeek-V2-Lite 采集了静态 DP 与静态 DCP 的 P90 TPOT 和 P90 ITL 数据。图~\ref{fig:dp-dcp-long-context} 汇总 4K 基线负载以及 1\% 128K、1\% 256K、1\% 512K 和 1\% 1M 长请求混部负载下的 DP/DCP 延迟曲线。数据呈现出两个关键趋势：（1）在低请求速率下（$\leq$4 rps），DCP 对长上下文请求的尾部延迟改善显著——例如 1M 上下文、1 rps 时 DCP 的 P90 ITL 为 10.1 ms，远低于 DP 的 27.7 ms；（2）但在高请求速率下（16 rps），DCP 反而劣于 DP——1M 上下文时 DCP 的 P90 ITL 为 61.3 ms，而 DP 为 53.8 ms，256K 和 512K 上下文也呈现相同趋势。这一反转说明静态 CP 的通信与同步开销在高负载下会抵消 KV 分片的收益：CP 度越高，跨卡通信量越大，当负载强度使通信成为瓶颈时，静态开启 CP 得不偿失。这恰好证明了运行时动态 CP 度选择的必要性——系统应根据当前负载强度和请求上下文长度在线决定是否启用 CP 及 CP 度，而非静态全开或全关。在此基础上，后续工作将实现 min(KV usage) DPLB 调度器原型和 Decode 侧动态 CP 度选择机制，并评估不同 Domain 规模和负载模式下的负载均衡效果与调度开销。
 
 \begin{figure}[htbp]
     \centering
@@ -172,7 +178,7 @@ PD 分离要求 Prefill 节点在完成长上下文计算后，将 KV Cache 交�
 
 \subsection{实验方案}
 
-实验模型方面，拟选择昇腾生态中已适配或正在适配的典型长上下文模型，如 Qwen 系列、DeepSeek 系列等，覆盖 MLA、GQA、MHA 或 MQA 等不同注意力结构。实验平台方面，拟基于昇腾 910 系列或实验室可用昇腾集群，使用 CANN、torch-npu、vLLM-Ascend、MindIE 或相关推理框架完成部署；在条件允许时，选取 NVIDIA GPU 平台作为对照，用于展示两类硬件在计算/访存比、HBM 访问压力和长文本 Decode 瓶颈上的差异。实验负载方面，Decode 节点已完成 4K、256K、512K、1M 上下文长度和 1--16 rps 负载下的 dycp-dp、dcp、pcp/pcp-16 对比；后续将补充三组实验：Decode 侧动态 CP 度选择实验（在不同上下文长度和负载下对比静态 CP 与动态 CP 的 ITL 分布和 QPS）、Prefill 侧动态 PCP 实验（在不同 prompt 长度下测量动态 PCP 的 TTFT 收益及与 PD Connector 传输模式的协同开销），以及 P/D 配比和长短请求混合比例实验。
+实验模型方面，拟选择昇腾生态中已适配或正在适配的典型长上下文模型，如 Qwen 系列、DeepSeek 系列等，覆盖 MLA、GQA、MHA 或 MQA 等不同注意力结构。实验平台方面，拟基于昇腾 910 系列或实验室可用昇腾集群，使用 CANN、torch-npu、vLLM-Ascend、MindIE 或相关推理框架完成部署；在条件允许时，选取 NVIDIA GPU 平台作为对照，用于展示两类硬件在计算/访存比、HBM 访问压力和长文本 Decode 瓶颈上的差异。实验负载方面，前期已完成 4K、128K、256K、512K、1M 上下文长度和 1--16 rps 负载下的 DP 与静态 DCP 基线对比（见图~\ref{fig:dp-dcp-long-context}），为后续动态 CP 研究提供了静态上界和下界参考。后续将补充三组实验：Decode 侧动态 CP 度选择实验（在不同上下文长度和负载下对比静态 CP 与动态 CP 的 ITL 分布和 QPS，验证动态决策能否逼近低负载 DCP 的访存收益同时避免高负载 DCP 的通信代价）、Prefill 侧动态 PCP 实验（在不同 prompt 长度下测量动态 PCP 的 TTFT 收益及与 PD Connector 传输模式的协同开销），以及 P/D 配比和长短请求混合比例实验（在不同 P/D 配比下评估三个研究点的优化效果，给出经验性配比建议）。
 
 对比基线包括：未启用 PD 分离的混合部署方案、启用 PD 分离但未针对 TP 异构优化的方案、启用通用 KV Cache 重排序的方案、启用静态 PCP/DCP 的单独优化方案、启用固定 CP 粒度的跨 DP 方案，以及本课题提出的融合 PD Connector、中心化调度框架与 P/D 两侧动态 CP 调度的优化方案。评价指标包括 TTFT、TPOT、ITL P50/P90/P95/P99、归一化 QPS、显存峰值、HBM 读写量及带宽利用率、AI Core 利用率、KV Cache 传输时间、layout 转换时间、算子 launch 次数、跨 DP 负载均衡程度和推理输出一致性等。特别地，通过 HBM 读写量随上下文长度的变化曲线和 AI Core 利用率的分阶段采样，可以量化“长上下文 → KV 访存放大 → 昇腾算力空转”这一核心瓶颈在不同优化方案下的缓解程度。
 
@@ -190,7 +196,7 @@ PD 分离要求 Prefill 节点在完成长上下文计算后，将 KV Cache 交�
 
 此外，已分析 CP-Viz 项目中的 CP 可视化材料，对 PCP/DCP 与 TP 组合后的 rank layout、slot mapping 和 virtual block 管理建立了直观理解，为本课题设计 PD+CP 下的 KV Cache 传输策略提供了参考。
 
-同时，已在 vLLM 社区提出 Dynamic Context Parallelism RFC \citep{vllmdynamiccp2025}，该 RFC 中 Domain 抽象、跨 DP 调度和 attention 聚合等设计，与本课题关注的 PD 分离和昇腾运行时适配具有直接关联。在此基础上，已在 PD 分离 Decode 节点完成 dycp-dp 原型和评估：在 512K 与 1M 长上下文场景中，dycp-dp 相比静态 dcp 和 pcp-16 能显著降低 P90 TPOT 与 P90 ITL，1M、16 rps 条件下 P90 ITL 控制在约 60 ms，说明该方案对昇腾长文本 Decode 具有实际优化效果。
+同时，已在 vLLM 社区提出 Dynamic Context Parallelism RFC \citep{vllmdynamiccp2025}，该 RFC 中 Domain 抽象、跨 DP 调度和 attention 聚合等设计，与本课题关注的 PD 分离和昇腾运行时适配具有直接关联。在此基础上，前期已在 PD 分离 Decode 节点完成 DP 与静态 DCP 的对比实验：数据表明低负载下 DCP 可大幅降低长上下文尾部延迟（1M、1 rps 时 P90 ITL 从 27.7 ms 降至 10.1 ms），但高负载下 DCP 反而不及 DP（1M、16 rps 时 DCP 的 P90 ITL 为 61.3 ms 而 DP 为 53.8 ms），这一反转直接验证了动态 CP 度选择的必要性，也为本课题 Decode 侧动态 CP 调度研究提供了明确的优化目标和评价基线。
 
 在具体技术问题上，前期工作已经取得以下阶段性进展：第一，GQA TP 异构场景下，D 节点能够从正确的 P rank 拉取 KV Cache，并在本地 block 内完成重排序；第二，PP 场景下能够根据 P 节点 PP stage 分组拉取不同层的 KV Cache，并写入 D 节点对应地址；第三，MTP 开启后通过显式配置 layer partition 解决默认层划分函数无法感知额外层的问题。上述基础表明，本课题并非从零开始，而是在已有系统实现和验证结果基础上继续完成实验闭环、消融分析和论文整理。
 
