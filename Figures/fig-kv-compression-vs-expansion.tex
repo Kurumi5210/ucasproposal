@@ -1,0 +1,153 @@
+%---------------------------------------------------------------------------%
+%->> KV cache total at max context: compression vs expansion visualisation
+%---------------------------------------------------------------------------%
+\providecolor{chartMuted}{HTML}{64748B}
+\providecolor{chartGrid}{HTML}{D8DDE3}
+
+\begin{tikzpicture}[
+    x=1.08cm,
+    y=0.092cm,
+    axis/.style={chartMuted,line width=0.50pt},
+    grid/.style={chartGrid,line width=0.30pt},
+]
+
+% Data: single-request KV cache total at max context (GB)
+% Model:           GPT-3  L65B   L2-70B L3-70B Q2-72B L3.1   DS-V2  DS-V3
+\def\values{9.0, 5.0, 1.3, 2.5, 40.0, 63.0, 8.4, 9.5}
+
+% Colour per era
+\def\barcolors{%
+    {prefillLine!60!white},
+    {prefillLine!60!white},
+    {decodeLine!55!white},
+    {decodeLine!55!white},
+    {decodeLine!55!white},
+    {decodeLine!55!white},
+    {violetLine!50!white},
+    {violetLine!50!white}%
+}
+\def\baredges{%
+    {prefillLine},{prefillLine},
+    {decodeLine},{decodeLine},{decodeLine},{decodeLine},
+    {violetLine},{violetLine}%
+}
+
+% Labels
+\def\models{%
+    {GPT-3\\175B},
+    {LLaMA\\65B},
+    {LLaMA 2\\70B},
+    {LLaMA 3\\70B},
+    {Qwen2\\72B},
+    {LLaMA 3.1\\405B},
+    {DeepSeek\\V2},
+    {DeepSeek\\V3}%
+}
+\def\years{2020,2023,2023,2024,2024,2024,2024,2025}
+
+% Y-axis range (GB), max slightly above 63
+\def\ymax{68}
+\def\yaxislen{6.4}
+\def\yzero{0.65}
+
+% ==== Draw background era bands ====
+\fill[prefill,opacity=0.30] (-0.52,\yzero) rectangle (1.52,6.60);
+\fill[decode,opacity=0.30] (1.52,\yzero) rectangle (5.52,6.60);
+\fill[violet,opacity=0.30] (5.52,\yzero) rectangle (7.52,6.60);
+
+\node[font=\sffamily\footnotesize,text=prefillLine,anchor=south] at (0.50,6.53) {MHA};
+\node[font=\sffamily\footnotesize,text=decodeLine,anchor=south] at (3.52,6.53) {GQA};
+\node[font=\sffamily\footnotesize,text=violetLine,anchor=south] at (6.52,6.53) {MLA};
+
+% ==== Y-axis ====
+\draw[axis] (0.0,\yzero) -- (0.0,\yaxislen);
+\draw[axis] (0.0,\yzero) -- (7.5,\yzero);
+\foreach \v in {0,10,20,30,40,50,60} {
+    \pgfmathsetmacro{\yp}{\yzero+\v/\ymax*(\yaxislen-\yzero)}
+    \draw[grid] (0.0,\yp) -- (7.5,\yp);
+    \draw[axis,line width=0.35pt] (-0.06,\yp) -- (0.0,\yp);
+    \node[font=\sffamily\footnotesize,text=muted,anchor=east] at (-0.12,\yp) {\v};
+}
+\node[font=\sffamily\footnotesize,text=muted,anchor=south,rotate=90] at (-0.52,3.52) {KV Cache @最大上下文 (GB, 单请求, FP16)};
+
+% ==== Bars ====
+\def\barw{0.62}
+% GPT-3 175B
+\pgfmathsetmacro{\bh}{9.0/\ymax*(\yaxislen-\yzero)}
+\filldraw[draw=prefillLine,fill=prefillLine!60!white,line width=0.5pt]
+    (0.0-\barw/2,\yzero) rectangle (0.0+\barw/2,\yzero+\bh);
+\node[font=\sffamily\tiny,text=prefillLine,anchor=south] at (0.0,\yzero+\bh+0.10) {9.0};
+
+% LLaMA 65B
+\pgfmathsetmacro{\bh}{5.0/\ymax*(\yaxislen-\yzero)}
+\filldraw[draw=prefillLine,fill=prefillLine!60!white,line width=0.5pt]
+    (1.0-\barw/2,\yzero) rectangle (1.0+\barw/2,\yzero+\bh);
+\node[font=\sffamily\tiny,text=prefillLine,anchor=south] at (1.0,\yzero+\bh+0.10) {5.0};
+
+% LLaMA 2 70B
+\pgfmathsetmacro{\bh}{1.3/\ymax*(\yaxislen-\yzero)}
+\filldraw[draw=decodeLine,fill=decodeLine!55!white,line width=0.5pt]
+    (2.0-\barw/2,\yzero) rectangle (2.0+\barw/2,\yzero+\bh);
+\node[font=\sffamily\tiny,text=decodeLine,anchor=south] at (2.0,\yzero+\bh+0.10) {1.3};
+
+% LLaMA 3 70B
+\pgfmathsetmacro{\bh}{2.5/\ymax*(\yaxislen-\yzero)}
+\filldraw[draw=decodeLine,fill=decodeLine!55!white,line width=0.5pt]
+    (3.0-\barw/2,\yzero) rectangle (3.0+\barw/2,\yzero+\bh);
+\node[font=\sffamily\tiny,text=decodeLine,anchor=south] at (3.0,\yzero+\bh+0.10) {2.5};
+
+% Qwen2 72B
+\pgfmathsetmacro{\bh}{40.0/\ymax*(\yaxislen-\yzero)}
+\filldraw[draw=decodeLine,fill=decodeLine!55!white,line width=0.5pt]
+    (4.0-\barw/2,\yzero) rectangle (4.0+\barw/2,\yzero+\bh);
+\node[font=\sffamily\tiny,text=decodeLine,anchor=south] at (4.0,\yzero+\bh+0.10) {40.0};
+
+% LLaMA 3.1 405B
+\pgfmathsetmacro{\bh}{63.0/\ymax*(\yaxislen-\yzero)}
+\filldraw[draw=decodeLine,fill=decodeLine!55!white,line width=0.5pt]
+    (5.0-\barw/2,\yzero) rectangle (5.0+\barw/2,\yzero+\bh);
+\node[font=\sffamily\tiny,text=decodeLine,anchor=south] at (5.0,\yzero+\bh+0.10) {63.0};
+
+% DeepSeek-V2
+\pgfmathsetmacro{\bh}{8.4/\ymax*(\yaxislen-\yzero)}
+\filldraw[draw=violetLine,fill=violetLine!50!white,line width=0.5pt]
+    (6.0-\barw/2,\yzero) rectangle (6.0+\barw/2,\yzero+\bh);
+\node[font=\sffamily\tiny,text=violetLine,anchor=south] at (6.0,\yzero+\bh+0.10) {8.4};
+
+% DeepSeek-V3
+\pgfmathsetmacro{\bh}{9.5/\ymax*(\yaxislen-\yzero)}
+\filldraw[draw=violetLine,fill=violetLine!50!white,line width=0.5pt]
+    (7.0-\barw/2,\yzero) rectangle (7.0+\barw/2,\yzero+\bh);
+\node[font=\sffamily\tiny,text=violetLine,anchor=south] at (7.0,\yzero+\bh+0.10) {9.5};
+
+% ==== Context length annotations above bars ====
+\node[font=\sffamily\tiny,text=muted,anchor=south] at (0.0,\yaxislen-0.05) {2K};
+\node[font=\sffamily\tiny,text=muted,anchor=south] at (1.0,\yaxislen-0.05) {2K};
+\node[font=\sffamily\tiny,text=muted,anchor=south] at (2.0,\yaxislen-0.05) {4K};
+\node[font=\sffamily\tiny,text=muted,anchor=south] at (3.0,\yaxislen-0.05) {8K};
+\node[font=\sffamily\tiny,text=muted,anchor=south] at (4.0,\yaxislen-0.05) {128K};
+\node[font=\sffamily\tiny,text=muted,anchor=south] at (5.0,\yaxislen-0.05) {128K};
+\node[font=\sffamily\tiny,text=muted,anchor=south] at (6.0,\yaxislen-0.05) {128K};
+\node[font=\sffamily\tiny,text=muted,anchor=south] at (7.0,\yaxislen-0.05) {128K};
+
+\node[font=\sffamily\footnotesize,text=muted,anchor=south] at (3.75,\yaxislen+0.12) {标注为最大上下文长度};
+
+% ==== Trend arrow ====
+\draw[kvLine,line width=1.0pt,->,dashed] (1.0,{5.0/\ymax*(\yaxislen-\yzero)+\yzero+0.35})
+    to[out=30,in=150] (5.0,{63.0/\ymax*(\yaxislen-\yzero)+\yzero+0.35});
+\node[font=\sffamily\footnotesize,text=kvLine,anchor=south] at (3.0,{63.0/\ymax*(\yaxislen-\yzero)+\yzero+0.55}) {GQA 128K $\times$ 扩张};
+
+% ==== X-axis labels ====
+\foreach \x/\m/\y in {0/{GPT-3\\175B}/2020, 1/{LLaMA\\65B}/2023, 2/{LLaMA 2\\70B}/2023, 3/{LLaMA 3\\70B}/2024, 4/{Qwen2\\72B}/2024, 5/{LLaMA 3.1\\405B}/2024, 6/{DeepSeek\\V2}/2024, 7/{DeepSeek\\V3}/2025} {
+    \node[font=\sffamily\tiny,text=ink,align=center,anchor=north] at (\x,-0.14) {\m};
+    \node[font=\sffamily\scriptsize,text=muted,anchor=north] at (\x,-0.82) {\y};
+}
+
+% ==== Key insight callout ====
+\node[font=\sffamily\footnotesize,text=ink,anchor=north west,align=left] at (0.0,-1.40) {%
+    GQA 压缩使 KV Cache 下降 $\to$ 128K 上下文使 KV Cache 飙升 $\to$ MLA 再次压缩但仍与 GPT-3@2K MHA 持平};
+\node[font=\sffamily\scriptsize,text=muted,anchor=north west] at (0.0,-1.95) {%
+    结论：每 token 压缩被窗口扩张抵消，KV Cache 总量随上下文线性增长的根本趋势未变};
+
+\end{tikzpicture}
+%---------------------------------------------------------------------------%

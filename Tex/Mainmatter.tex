@@ -8,13 +8,68 @@
 
 近年来，大语言模型已从通用对话逐步扩展到知识库问答、长文档理解、代码仓库分析、智能体任务规划等复杂场景，需要模型一次性处理数万到数十万 token 的上下文。长文本输入会显著增加首字延迟、显存占用、KV Cache 管理压力和多卡通信开销，使推理系统在吞吐、时延和资源利用率之间面临更复杂的权衡。更重要的是，长文本推理在昇腾等国产加速器上的瓶颈结构与 NVIDIA GPU 存在显著差异，面向 GPU 的优化方案不能直接迁移。
 
+Transformer 架构和大规模自回归语言模型奠定了当前大模型服务的基础\citep{vaswani2017attention,brown2020language}；随后 LLaMA、Qwen、DeepSeek 等开源或开放权重模型不断扩大参数规模、上下文窗口和模型结构复杂度\citep{touvron2023llama,touvron2023llama2,dubey2024llama3,yang2024qwen2,yang2025qwen25,deepseekai2024deepseekv2,deepseekai2025deepseekv3,deepseekai2025deepseekr1}。这些模型普遍采用 RoPE、GQA/MQA、MoE、MLA 或量化等结构与部署技术，使长上下文推理从单一注意力计算问题演化为模型结构、KV Cache、并行策略和硬件访存能力共同决定的系统问题。
+
+表~\ref{tab:ctx-kvcache-evolution} 梳理了自 GPT-3 时代以来主流模型的上下文长度和 KV Cache 格式演进。这些数据汇聚为一个核心结论：
+
+\textbf{压缩追不上扩张：KV 格式优化被上下文窗口增长抵消。}将压缩比与扩张比放在同一坐标系下对比，这一矛盾更加清晰。以 70B 级模型为例，KV 格式从 MHA 演进到 MLA 实现了约 34$\times$ 的每 token 压缩（LLaMA 65B MHA 的 2,560 KB/token $\to$ DeepSeek-V3 MLA 的 76 KB/token），但同期上下文窗口从 GPT-3 的 2K 扩张到当前主流的 128K——仅窗口扩张就贡献了 64$\times$ 的增长。结果是：DeepSeek-V3 在 128K MLA 下的单请求 KV Cache 约 10 GB，几乎被拉回到 GPT-3 175B 在 2K MHA 下的 9 GB 水平；若上下文进一步扩张至 1M，即使 MLA 也需约 60 GB 单请求 KV Cache。换言之，压缩进步被窗口扩张吃掉了一大半——每 token 开销的下降只是延缓了 KV Cache 总量的增长斜率，并未改变其随上下文长度线性增长的根本趋势。闭源模型（Claude Opus 4.6/4.7、Gemini 1.5 Pro）已支持 1M 上下文，Llama 4 等下一代开源模型也在向 1M 靠拢，这意味着仅靠 KV Cache 格式压缩不足以消化上下文增长，必须在系统架构层面引入 PD 分离、CP 并行和 KV Cache 层级存储等协同优化。图~\ref{fig:kv-compression-vs-expansion} 将这一态势直观呈现为各代模型在最大上下文下的单请求 KV Cache 总量。
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{0.96\textwidth}{!}{\input{Figures/fig-kv-compression-vs-expansion}}
+    \caption{KV Cache 总量随上下文窗口扩张的演变（单请求、FP16、最大上下文长度）}
+    \label{fig:kv-compression-vs-expansion}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{主流大模型上下文长度与 KV Cache 格式演进（2020--2026）}
+\label{tab:ctx-kvcache-evolution}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccclcc@{}}
+\toprule
+模型 & 年份 & 参数量 & 上下文 & KV 格式 & KV/token (KB) & KV@ctx (GB) \\
+\midrule
+\multicolumn{7}{c}{\textit{MHA 时代：KV Cache 随序列长度和头数线性放大}} \\
+GPT-3 175B\citep{brown2020language} & 2020 & 175B & 2K & MHA & 4,608 & 9.0 \\
+LLaMA 7B\citep{touvron2023llama} & 2023 & 7B & 2K & MHA & 512 & 1.0 \\
+LLaMA 65B\citep{touvron2023llama} & 2023 & 65B & 2K & MHA & 2,560 & 5.0 \\
+\midrule
+\multicolumn{7}{c}{\textit{GQA/MQA 时代：分组 KV head 大幅压缩每 token 开销}} \\
+LLaMA 2 70B\citep{touvron2023llama2} & 2023 & 70B & 4K & GQA (64/8) & 320 & 1.3 \\
+Mistral 7B\citep{jiang2023mistral} & 2023 & 7B & 8K & GQA (32/8) & 128 & 1.0 \\
+LLaMA 3 8B\citep{dubey2024llama3} & 2024 & 8B & 8K & GQA (32/8) & 128 & 1.0 \\
+LLaMA 3 70B\citep{dubey2024llama3} & 2024 & 70B & 8K & GQA (64/8) & 320 & 2.5 \\
+Qwen2 72B\citep{yang2024qwen2} & 2024 & 72B & 128K & GQA (64/8) & 320 & 40.0 \\
+LLaMA 3.1 405B\citep{dubey2024llama3} & 2024 & 405B & 128K & GQA (128/8) & 504 & 63.0 \\
+\midrule
+\multicolumn{7}{c}{\textit{MLA 时代：低秩压缩打破 KV head 数量约束}} \\
+DeepSeek-V2\citep{deepseekai2024deepseekv2} & 2024 & 236B & 128K & MLA ($d_c{=}512,d_R{=}64$) & 68 & 8.4 \\
+DeepSeek-V3\citep{deepseekai2025deepseekv3} & 2025 & 671B & 128K & MLA ($d_c{=}512,d_R{\approx}128$) & $\approx$76 & $\approx$9.5 \\
+\midrule
+\multicolumn{7}{c}{\textit{超长上下文：1M+ token 对 KV Cache 提出极端需求}} \\
+Claude Opus 4.6 & 2026 & — & 1M & 未公开 & — & — \\
+Claude Opus 4.7 & 2026 & — & 1M & 未公开 & — & — \\
+Gemini 1.5 Pro & 2024 & — & 1M & 未公开 & — & — \\
+\bottomrule
+\end{tabular}%
+}
+
+\vspace{4pt}
+\raggedright\scriptsize
+注：KV/token 表示 FP16 下每 token KV Cache 开销；KV@ctx 表示最大上下文长度下的单请求 KV Cache 估算。MHA/GQA 计算式为 $2 \times n_\text{layers} \times n_\text{kv\_heads} \times d_\text{head} \times 2\ \text{bytes} / 1024$；MLA 为 $n_\text{layers} \times (d_c + d_R) \times 2\ \text{bytes} / 1024$。GQA 括号内标注 $n_\text{heads}/n_\text{kv\_heads}$。参数量为总参数（含 MoE 总参数量），闭源模型 KV 格式未公开。
+\end{table}
+
 自回归大模型推理可分为 Prefill 和 Decode 两阶段。Prefill 阶段计算量随输入长度快速增长，通常表现为计算密集型，直接决定 Time To First Token（TTFT）；Decode 阶段逐 token 生成，受显存带宽和 KV Cache 访问效率主导，直接决定 Time Per Output Token（TPOT）。两阶段的资源特征明显不同，传统混合部署方式将 Prefill 和 Decode 放在同一组设备上，通过 continuous batching、PagedAttention、chunked prefill 等机制共调度\citep{kwon2023efficient}。这种方式在中短上下文下有效，但在长文本负载中容易暴露阶段间干扰：长 Prefill 插入 Decode 批次后导致 ITL 抖动，而 Decode 的低 TPOT 要求又限制 Prefill 批大小，使 TTFT 难以下降。两阶段对并行策略和批处理参数的最优配置也不一致，混合部署迫使系统采用折中策略，造成资源浪费。
 
 Prefill-Decode 分离（PD 分离）正是针对上述问题提出的系统优化思路，它将 Prefill 和 Decode 分别部署在不同实例或集群上，请求由 P 实例完成长上下文编码后，将 KV Cache 传输到 D 实例继续生成。该架构的核心价值在于 P 和 D 可分别配置设备数量、并行策略和调度策略，使 TTFT 与 TPOT 相对独立优化；Decode 不再被长 Prefill 打断，有利于控制尾延迟。对于昇腾平台，PD 分离还具有更明确的适配意义：P 侧可通过更大 batch 和更高并行度利用 NPU 矩阵计算能力，D 侧围绕 KV Cache 访存和 PageAttention 进行优化，避免两阶段在昇腾特有的高计算/访存比下相互放大开销。
 
 与此同时，即使采用 PD 分离，超长 prompt 的 Prefill 仍可能在单个并行组内产生很高的 TTFT，Decode 阶段随上下文增长也受 KV Cache 容量的限制。上下文并行（Context Parallelism，简称 CP）沿序列维度切分输入或 KV Cache，是解决长序列瓶颈的另一关键技术：Prefill Context Parallelism（PCP）将长输入切分到多设备并行以降低 TTFT；Decode Context Parallelism（DCP）将 KV Cache 按序列维度分片，减少冗余存储。
 
-从硬件特征看，长文本推理优化还必须考虑不同加速器的计算/访存能力配比。昇腾 910 系列的 FP16 峰值算力与 HBM 带宽之比约为同代 NVIDIA GPU 的 1.5--2 倍，这意味着每单位 HBM 带宽需要支撑更多的计算操作，访存更容易成为系统瓶颈。这一差异在长上下文 Decode 阶段尤为关键。Decode 阶段每生成一个 token，需要从 HBM 读取模型权重（约 $2\times$ 参数量字节）和该请求的完整 KV Cache（约 $2 \times n_\text{layers} \times L \times n_\text{kv\_heads} \times d_\text{head}$ 字节，其中 $L$ 为当前上下文长度）。当 $L$ 增长至 128K 乃至 1M，KV Cache 读取量远超权重读取量，成为 HBM 访问的主导成分；此时昇腾高计算/访存比导致计算单元等待数据的时间占比更高，算力利用率更低。相比之下，Prefill 阶段以批量矩阵乘法为主，单次加载权重后可在大量 token 上复用计算，计算/访存比高的优势得以发挥。因此，昇腾长文本推理的瓶颈呈现出”Prefill 偏计算、Decode 偏访存”的两极分化，且上下文越长分化越剧烈。
+从硬件特征看，长文本推理优化还必须考虑不同加速器的计算/访存能力配比。根据公开的硬件规格，昇腾 910 系列的 FP16 峰值算力与 HBM 带宽之比显著高于同代 NVIDIA GPU——以 FP16 算力（TFLOPS）与 HBM 带宽（TB/s）的比值衡量，昇腾 910B 每 TB/s 带宽需支撑的算力约为 H100 的 1.5--2 倍——这意味着每单位 HBM 带宽需要支撑更多的计算操作，访存更容易成为系统瓶颈。这一差异在长上下文 Decode 阶段尤为关键。Decode 阶段每生成一个 token，需要从 HBM 读取模型权重（约 $2\times$ 参数量字节）和该请求的完整 KV Cache（约 $2 \times n_\text{layers} \times L \times n_\text{kv\_heads} \times d_\text{head}$ 字节，其中 $L$ 为当前上下文长度）。当 $L$ 增长至 128K 乃至 1M，KV Cache 读取量远超权重读取量，成为 HBM 访问的主导成分；此时昇腾高计算/访存比导致计算单元等待数据的时间占比更高，算力利用率更低。相比之下，Prefill 阶段以批量矩阵乘法为主，单次加载权重后可在大量 token 上复用计算，计算/访存比高的优势得以发挥。因此，昇腾长文本推理的瓶颈呈现出”Prefill 偏计算、Decode 偏访存”的两极分化，且上下文越长分化越剧烈。这一硬件特异的瓶颈结构决定了单一优化手段难以同时兼顾两阶段：算子级优化和 KV Cache 压缩可以降低每 token 访存开销，但无法解决超长上下文的单请求 KV Cache 总量问题；通用 batching 调度可以在短上下文负载下提高吞吐，但无法消除长 Prefill 插入 Decode 批次造成的延迟抖动。因此，必须在系统架构层面同时引入两阶段解耦（PD 分离）和序列维度切分（CP 并行），从”隔离干扰”和”分摊压力”两个方向协同应对。
 
 面向昇腾的优化需要因阶段施策：P 侧利用高算力加速长 prompt 的批量 Prefill 计算，D 侧则必须以削减 KV Cache 访存和 HBM 带宽压力为首要目标——通过 PD 分离隔离两阶段干扰，通过 PCP/DCP 沿序列维度分摊或去冗余 KV 存储，通过动态 CP 在 P 侧按 prompt 长度选择 CP size、在 D 侧按上下文长度和负载选择 CP size，从而按需分摊长 prompt 的 Prefill 计算和长上下文 Decode 的 KV 读取压力。后续实验将通过 HBM 读写量、AI Core 利用率和 TTFT/TPOT 分解，量化昇腾与 NVIDIA 平台在长文本 Decode 瓶颈上的结构性差异。
 
@@ -42,17 +97,23 @@ Prefill-Decode 分离（PD 分离）正是针对上述问题提出的系统优�
 
 大模型推理服务系统的早期优化主要集中在批处理调度、KV Cache 管理、算子融合和显存复用等方面。随着 Transformer 模型规模和上下文长度不断增加，KV Cache 已成为推理系统中的核心状态。PagedAttention 等方法借鉴操作系统分页思想，将 KV Cache 划分为固定大小的 block，并通过 block table 管理非连续缓存，从而降低显存碎片并提升多请求服务能力\citep{kwon2023efficient}。Continuous batching、prefix caching、chunked prefill、FlashAttention/FlashDecoding 等技术进一步提高了在线推理服务的吞吐和延迟表现\citep{dao2022flashattention,flashdecoding2023}。这些技术构成了当前大模型推理框架的基础能力，也是 PD 分离与 CP 并行进一步发挥作用的前提。
 
+从模型和算法层看，长上下文能力的提升主要来自三类路线：一是稀疏或局部注意力结构，如 Longformer 将长文档注意力复杂度降为近似线性\citep{beltagy2020longformer}；二是位置编码外推和窗口扩展，如 ALiBi、Position Interpolation 与 YaRN 改善模型对超出训练长度序列的泛化\citep{press2021train,chen2023extending,peng2023yarn}；三是面向无限上下文或流式场景的记忆机制，如 StreamingLLM 和 Infini-attention 通过保留 attention sink 或压缩记忆降低长序列服务开销\citep{xiao2023streamingllm,munkhdalai2024leave}。不过，长上下文窗口本身并不等价于稳定使用长上下文，Lost in the Middle 和 LongBench 等评测表明，模型对长输入中部信息的利用和跨任务稳定性仍然存在明显差异\citep{liu2023lost,bai2023longbench}。
+
+从推理算子和 KV Cache 结构看，FlashAttention-2 进一步优化了长序列 attention 的并行划分和访存效率\citep{dao2023flashattention2}；MQA/GQA 通过减少 KV head 数降低 Decode 阶段 KV Cache 规模和内存带宽压力\citep{shazeer2019fast,ainslie2023gqa,pope2022efficiently}；H2O、Scissorhands、KIVI、KVQuant 和 InfiniGen 等工作则分别从 KV eviction、重要 token 保留、KV 量化和动态预取等角度降低 KV Cache 的显存占用或访存流量\citep{zhang2023h2o,liu2023scissorhands,liu2024kivi,hooper2024kvquant,lee2024infinigen}。这些工作说明，Decode 阶段的核心瓶颈正在从“算得快”转向“KV Cache 能否以合适布局、合适精度和合适粒度被快速访问”。
+
+从服务系统层看，DeepSpeed Inference、FlexGen、TurboTransformers、SpecInfer 和 SGLang 分别围绕多 GPU/异构内存推理、单 GPU 高吞吐 offloading、Transformer serving kernel、投机推理和结构化程序执行优化服务能力\citep{aminabadi2022deepspeedinference,sheng2023flexgen,fang2020turbotransformers,miao2023specinfer,zheng2023sglang}。Sarathi 和 Sarathi-Serve 进一步将 prefill 切块与 decode 批处理结合，缓解混合部署中 prefill/decode 相互干扰的问题\citep{agrawal2023sarathi,agrawal2024sarathiserve}。这些系统优化与本课题关注的 PD 分离、DPLB 和动态 CP 共同指向同一趋势：长文本推理服务需要在请求级、阶段级和序列级同时做资源调度。
+
 然而，长文本推理对系统提出了更强的要求。长上下文输入会放大 Prefill 阶段的计算开销，使 TTFT 从毫秒级或秒级上升到数秒甚至数十秒；同时，历史 KV Cache 随上下文长度和并发请求数线性增长，Decode 阶段的显存压力和访存开销显著增加。单纯依靠通用 batching 或显存管理技术，难以同时满足长输入低 TTFT、长输出低 TPOT、高吞吐和高并发。因此，近年来研究重点逐渐从单点算子优化转向面向推理阶段、序列维度和集群资源的系统级优化，其中 PD 分离和 CP 并行是最具代表性的两条路线。
 
 \subsection{Prefill-Decode 分离研究现状}
 
-国际上，PD 分离的思想首先由一系列工作系统化提出。Splitwise 最早指出 Prefill 和 Decode 分别呈现计算密集和访存密集特征，可部署在不同类型设备上\citep{patel2023splitwise}。DistServe 将其发展为面向 SLO 的系统架构，将两阶段分配到不同 GPU，分别针对 TTFT 和 TPOT 约束进行资源和并行策略协同优化，并考虑阶段间 KV Cache 传输带宽\citep{zhong2024distserve}。Mooncake 进一步从 KV Cache 视角构建分离式架构，利用 GPU 集群中未充分使用的 CPU、DRAM、SSD 等资源构建分层 KV Cache 存储，将 KV Cache 的生成、传输、缓存和调度纳入系统设计\citep{qin2024mooncake}——该工作表明长文本下 PD 分离的瓶颈会从计算迁移到 KV Cache 生命周期管理。开源推理框架方面，vLLM 已集成 disaggregated prefilling，vLLM-Ascend 进一步支持基于 Mooncake 的 PD 分离方案，包括 MooncakeConnector 和 MooncakeLayerwiseConnector\citep{vllmascendpd2026,vllmascenddeepseekpd2026}。国内方面，昇腾 MindIE 将 PD 分离作为关键特性，与 Continuous Batching、Page Attention、FlashDecoding 等机制协同使用；昇腾大规模专家并行方案将 P 和 D 部署在不同服务器上，通过高速互联传输 KV Cache，官方技术文章明确指出了混合部署下资源利用不足和阶段间干扰问题\citep{mindie2026,ascendpd2025,ascendexpert2026}。
+国际上，PD 分离的思想首先由一系列工作系统化提出。Splitwise 最早指出 Prefill 和 Decode 分别呈现计算密集和访存密集特征，可部署在不同类型设备上\citep{patel2023splitwise}。DistServe 将其发展为面向 SLO 的系统架构，将两阶段分配到不同 GPU，分别针对 TTFT 和 TPOT 约束进行资源和并行策略协同优化，并考虑阶段间 KV Cache 传输带宽\citep{zhong2024distserve}。Mooncake 进一步从 KV Cache 视角构建分离式架构，利用 GPU 集群中未充分使用的 CPU、DRAM、SSD 等资源构建分层 KV Cache 存储，将 KV Cache 的生成、传输、缓存和调度纳入系统设计\citep{qin2024mooncake}——该工作表明长文本下 PD 分离的瓶颈会从计算迁移到 KV Cache 生命周期管理。LoongServe 则从弹性序列并行角度处理长短请求和不同阶段间资源需求差异，为 PD 分离之外的动态并行服务提供了重要参考\citep{wu2024loongserve}。开源推理框架方面，vLLM 已集成 disaggregated prefilling，vLLM-Ascend 进一步支持基于 Mooncake 的 PD 分离方案，包括 MooncakeConnector 和 MooncakeLayerwiseConnector\citep{vllmascendpd2026,vllmascenddeepseekpd2026}。国内方面，昇腾 MindIE 将 PD 分离作为关键特性，与 Continuous Batching、Page Attention、FlashDecoding 等机制协同使用；昇腾大规模专家并行方案将 P 和 D 部署在不同服务器上，通过高速互联传输 KV Cache，官方技术文章明确指出了混合部署下资源利用不足和阶段间干扰问题\citep{mindie2026,ascendpd2025,ascendexpert2026}。
 
 总体来看，PD 分离已形成较清晰的技术共识：Prefill 和 Decode 具有不同资源特征，应在系统层面解耦。但现有研究在昇腾平台适配方面存在明显不足。首先，现有工作主要基于 NVIDIA GPU 和 CUDA 生态，其通信原语和缓存布局与昇腾平台差异显著。其次，PD 分离会引入额外 KV Cache 传输成本，当输入长度、P/D 比例或网络带宽变化时收益并不稳定，而昇腾高计算/访存比会进一步放大 KV 传输和 D 侧访存之间的压力耦合——当 D 侧的 KV Cache 拉取、layout 重排和 PageAttention 访问缺乏针对性优化时，昇腾有限的 HBM 带宽将同时承受三方面压力，P 侧节省的 TTFT 可能被 D 侧 TPOT 抖动完全抵消。再者，在 TP 异构场景下，P 侧生成的 KV Cache 布局与 D 侧 PageAttention 所需布局可能不一致：对于 GQA/MHA 模型，KV head 随 TP rank 切分，D 侧若按默认路径拉取 KV Cache 将出现 KV head 缺失或顺序错误；PP 场景下层划分关系进一步复杂化，框架现有实现尚未覆盖 PP 与 MTP 的层切分冲突。因此，昇腾上的 PD 分离需要将阶段解耦、KV 传输、布局转换、通信拓扑和访存瓶颈作为整体来优化。
 
 \subsection{上下文并行研究现状}
 
-上下文并行的核心思想是沿序列维度切分长上下文，使一个请求的长序列计算分布在多个设备上完成。与数据并行按请求或样本划分、张量并行按隐藏维度或矩阵维度划分、流水并行按层划分不同，CP 直接针对长上下文本身进行切分，因此特别适合解决长 prompt 带来的单设备显存和时延瓶颈。
+上下文并行的核心思想是沿序列维度切分长上下文，使一个请求的长序列计算分布在多个设备上完成。与数据并行按请求或样本划分、张量并行按隐藏维度或矩阵维度划分、流水并行按层划分不同，CP 直接针对长上下文本身进行切分，因此特别适合解决长 prompt 带来的单设备显存和时延瓶颈。作为对比，张量并行、流水并行、ZeRO 和多维并行已在 Megatron-LM、GPipe、ZeRO、Megatron 等训练系统中被充分研究，主要服务于参数和激活显存扩展\citep{shoeybi2019megatron,huang2019gpipe,rajbhandari2020zero,narayanan2021megatron}；而 MoE 相关的 GShard 和 Switch Transformer 进一步引入专家并行与 all-to-all 通信，对推理阶段的负载均衡和同步等待提出了更高要求\citep{lepikhin2020gshard,fedus2021switch}。
 
 Ring Attention 是上下文并行方向的代表性工作之一。该方法采用 blockwise attention，将序列划分为多个 block，并通过环形通信在设备间传递 KV block，使每个设备可以在计算本地 attention 的同时与其他设备交换 KV 数据\citep{liu2023ringattention}。Ring Attention 的重要特点是保持精确注意力计算，不依赖稀疏化或近似剪枝，并通过通信与计算重叠来提升长序列可扩展性。它为后续长上下文训练和推理中的 ring-style CP 提供了基础思路。
 
@@ -87,6 +148,18 @@ PD 分离要求 Prefill 节点在完成长上下文计算后，将 KV Cache 交�
 （1）融合 split、cat 和 transpose 为单一 kernel，消除中间结果的 HBM 写回。每块 KV Cache 数据仅需一次 HBM 读入和一次 HBM 写出，将 HBM 访存次数从 3 读 3 写降为 1 读 1 写，在昇腾高计算/访存比条件下 HBM 带宽需求降至原来的约 1/3，这正是针对昇腾访存瓶颈的对症下药。（2）利用昇腾 NPU 的 DataCopy 指令族在 Unified Buffer（UB）内完成跨 head 的数据重排。UB 作为片上 SRAM，带宽远高于 HBM，在 UB 内完成 transpose 操作可将跨 HBM 往返的数据搬移压缩为片上寄存器级的数据交换，transpose 本身不再消耗 HBM 带宽。（3）引入 Tiling 策略，将一个或多个 block 的 KV Cache 数据分批载入 UB，在 UB 内完成全部切分、拼接和转置操作后一次性写回目标地址。一次 kernel launch 处理多个 block，launch 次数从“层数 $\times$ block 数”降为“层数 $\times\lceil\text{block 数} / \text{tile 大小}\rceil$”，launch 开销由此被压缩至可忽略水平。（4）针对 MHA、GQA 和 MQA 三种注意力结构生成模板化代码路径：MHA 场景下 KV head 数与 attention head 数相等，head 维度切分粒度最细，transpose 需在 head 维度做密集重排；GQA 场景下 KV head 数较少，head 维度重排计算量较小但跨 TP rank 的 KV head 聚合逻辑需特殊处理；MQA 场景下仅一个 KV head，可跳过 head 维度重排仅做 block 粒度的数据搬运——通过在编译期为每种注意力结构特化 UB 分块方案和 DataCopy 指令序列，避免运行时分支，使每种 head 配置获得最优代码路径。该融合算子的目标是将布局转换开销压缩至微秒级，使 KV 布局转换不再构成 Decode critical path 上的可见开销。
 
 当前已完成 GQA TP 异构、PP 层切分和 MTP 额外层场景下的布局映射与正确性验证。初步测试结果表明，GQA KV Cache 重排若使用 torch 原生算子路径，平均耗时约 155.93 ms；改用 NPU 融合算子后，平均耗时降至约 5.56 ms（图~\ref{fig:reshape-benchmark}）。该研究点是 PD 分离在昇腾平台上正确、高效运行的基础设施，也是后续动态 CP 能够稳定工作的前提。
+
+上述 PD Connector 在设计(1)中要求 Connector 感知 P/D 两侧的 TP、PP 和 layer partition 配置。在动态 CP 场景下，Connector 还需进一步感知 P/D 两侧的 PCP 和 DCP 配置——因为 CP 沿序列维度切分 KV Cache，P 侧启用 PCP 后 KV Cache 分布在多个 P rank 上，D 侧启用 DCP 后各 D rank 仅需拉取其负责序列分片对应的 KV 数据。为此，基于 MooncakeConnector 已实现 CP 感知的 KV Cache 传输机制，作为动态 CP 调度在传输层的基础设施，其核心设计如下。
+
+（1）请求级 CP 元数据传递。ReqMeta 结构中携带 \verb|remote_pcp_size|、\verb|remote_dcp_size| 和 \verb|remote_ptp_size| 字段，使每个请求可独立携带其 P 侧的 PCP、DCP 和 TP 配置。MooncakeConnectorScheduler 在 \verb|request_finished| 回调中将上述参数注入 \verb|kv_transfer_params|，随请求在 P/D 节点间传递。该设计的关键价值在于：Connector 天然支持请求级异构 CP 度——不同请求可采用不同的 PCP/DCP 配置而无需修改传输路径，为研究点 3 的动态 CP 调度（运行时按请求特征选择 CP 度）提供了传输层基础。
+
+（2）CP 组元数据与端口映射。当 P 侧 PCP 度与 D 侧 DCP 度的乘积大于 1 时，KV Cache 经 CP 切分后分布在多个 P rank 上，D 侧需从正确的 P rank 子集拉取对应分片。\verb|_get_kv_split_metadata| 函数首先构建 P 节点和 D 节点的 CP 组元数据（\verb|get_cp_group_meta|）：以 KV head 组为键，将每个 KV head 组关联到其 CP 组列表——每个 CP 组包含 $\text{pcp\_size} \times \text{dcp\_size}$ 个端口，对应一组在序列维度和 TP 维度上协同的 rank。随后，\verb|get_local_remote_block_port_mappings| 在 KV head 组粒度上进行 P/D 两侧的兼容性校验与端口映射：对于 GQA/MHA 模型，P 侧 TP 切分的 KV head 必须是 D 侧 KV head 的子集（\verb|set(p_head).issubset(set(d_head))|），确保跨 CP 传输中 KV head 不缺失、不错位；对于 MLA 模型，所有 rank 持有全量 KV Cache，映射退化为轮询负载均衡。每个 D 端口的映射结果为该端口需要访问的 P 端口列表，Connector 在后续传输中按此列表逐端口拉取。
+
+（3）序列块跨 CP rank 分布。KV Cache 的 prompt block 按轮询（interleave）方式分布到各 CP rank：\verb|remote_block_nums_all| 计算每个远程 CP rank 持有的 block 数，考虑 prefix cache 命中后的实际需传输 block 数，并将最后一个可能不满的 block 确保分配到正确的 D 侧 rank——不满 block 在 P 侧的 CP rank 位置（\verb|last_block_location|）可能不同于 D 侧的 CP rank 位置，需显式重排以保证数据完整性和地址对齐。D 侧按 \verb|local_cp_rank| 筛选属于本 rank 的 block 子集，生成 \verb|remote_block_ids_list| 与 \verb|local_block_ids_list| 的对应关系，随后按 $( \text{pcp\_dcp\_rank}, \text{tp\_pull} )$ 的二维索引逐任务下发至 \verb|KVCacheRecvingThread|。
+
+（4）跨节点拓扑感知与引用计数。\verb|multi_nodes_meta_mapping| 维护每个远程 rank 的 host 和 engine\_id 信息，使 D 侧在跨机架部署时可选择同一 HCCS ring 内的 P rank 作为 KV Cache 源端，优先利用高带宽域内链路。\verb|remote_port_send_num| 统计每个远程端口在本次传输中被引用的总次数，D 侧各 rank 完成拉取后通过 ZMQ side channel 向 P 侧发送 \verb|DONE_RECVING_MSG|，P 侧仅在收到全部引用次数的确认后才释放对应请求的 KV Cache，保证跨 CP 多源拉取场景下的数据生命周期安全。
+
+上述 CP 感知传输机制已在 vLLM-Ascend 的 MooncakeConnector 中完整实现。它使 PD Connector 从"仅支持 CP=1 的 KV 传输"扩展为"支持 P/D 两侧任意 PCP/DCP 组合的 KV 传输"，为研究点 3 的动态 CP 调度提供了关键传输层基础——当调度器为请求在线选择 CP 度后，Connector 按上述机制自动完成对应 CP 配置下的 KV Cache 拉取和布局适配，无需调度器干预传输细节。此外，该机制中 P/D 两侧 CP 异构的端口映射和块分布逻辑，直接覆盖了研究点 3 中 PCP 与 PD Connector 传输模式适配的关键技术问题——P 侧启用 PCP 后 KV Cache 分布在多个 P rank 上，D 侧按 CP 组映射关系从多源端聚合，避免了在 P 侧 gather 引入额外延迟。
 
 \begin{figure}[htbp]
     \centering
@@ -125,7 +198,7 @@ PD 分离要求 Prefill 节点在完成长上下文计算后，将 KV Cache 交�
 
 研究点 2 的中心化调度框架通过 min(KV usage) DPLB 解决了”请求去哪个 DP 副本”的单副本负载均衡问题，但当一个请求的上下文极长时，单个 DP 副本的 KV Cache 容量和 HBM 带宽均可能成为瓶颈——KV Cache 可能超出单副本显存，或因 HBM 遍历量过大导致 ITL 失控。此时需要将该请求的 KV Cache 沿序列维度分片到多个 DP 副本上协同执行，即跨 DP 的 CP 执行。与此同时，P 侧的 Prefill 延迟（TTFT）同样随 prompt 长度线性增长：短 prompt 不需要 PCP 并行，但超长 prompt（如 $>$128K）若不在多卡上切分 Prefill 计算，TTFT 将远超 SLO。两个问题的本质相同：跨卡协同虽是解决长序列瓶颈的有效手段，但跨卡数量（CP 度）若为静态配置，无法同时兼顾短请求的低开销和长请求的并行收益。研究点 2 的 DPLB 负责选择单个目标副本（where），本研究点负责实现跨 DP 协同执行的完整机制（how），并在线决定跨几个副本（how many）。
 
-为建立动态 CP 度选择的实验基线，前期基于 DeepSeek-V2-Lite 采集了静态 DP 与静态 DCP 的 P90 TPOT 和 P90 ITL 数据。图~\ref{fig:dp-dcp-long-context} 汇总 4K 基线负载以及 1\% 128K、1\% 256K、1\% 512K 和 1\% 1M 长请求混部负载下的 DP/DCP 延迟曲线。数据呈现出两个关键趋势：（1）在低请求速率下（$\leq$4 rps），DCP 对长上下文请求的尾部延迟改善显著——例如 1M 上下文、1 rps 时 DCP 的 P90 ITL 为 10.1 ms，远低于 DP 的 27.7 ms；（2）但在高请求速率下（16 rps），DCP 反而劣于 DP——1M 上下文时 DCP 的 P90 ITL 为 61.3 ms，而 DP 为 53.8 ms，256K 和 512K 上下文也呈现相同趋势。这一反转直接定义了动态 CP 的优化目标：系统应在低负载时获得近似静态 DCP 的访存收益，在高负载时避免静态 DCP 的通信代价，即根据当前负载强度和请求上下文长度在线决定 CP 度。图~\ref{fig:decode-dynamic-cp} 对比了静态调度（所有请求 CP 度相同）与动态 CP 调度（按请求特征异构分配 CP 度）的概念差异。
+为建立动态 CP 度选择的实验基线，前期基于 DeepSeek-V2-Lite 采集了静态 DP 与静态 DCP 的 P90 TPOT 和 P90 ITL 数据。图~\ref{fig:dp-dcp-long-context} 汇总 4K 基线负载以及 1\% 128K、1\% 256K、1\% 512K 和 1\% 1M 长请求混部负载下的 DP/DCP 延迟曲线。数据呈现出两个关键趋势：（1）在低请求速率下（$\leq$4 rps），DCP 对长上下文请求的尾部延迟改善显著——例如 1M 上下文、1 rps 时 DCP 的 P90 ITL 为 10.1 ms，远低于 DP 的 27.7 ms；（2）但在高请求速率下（16 rps），DCP 反而劣于 DP——1M 上下文时 DCP 的 P90 ITL 为 61.3 ms，而 DP 为 53.8 ms，256K 和 512K 上下文也呈现相同趋势。这一反转直接定义了动态 CP 的优化目标：系统应在低负载时获得近似静态 DCP 的访存收益，在高负载时避免静态 DCP 的通信代价，即根据当前负载强度和请求上下文长度在线决定 CP 度。图~\ref{fig:decode-dynamic-cp} 参考 vLLM PR \#44967 的实现，给出了开启 DyCP 后的中心化跨 DP 调度框架。
 
 \begin{figure}[htbp]
     \centering
@@ -137,14 +210,14 @@ PD 分离要求 Prefill 节点在完成长上下文计算后，将 KV Cache 交�
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{fig-dycp-architecture}
-    \caption{请求级调度与 token/request 级动态 CP 调度对比}
+    \caption{开启 DyCP 后的中心化调度、长短请求路由与 KV Cache 分片}
     \label{fig:decode-dynamic-cp}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{fig-dycp-system-architecture}
-    \caption{DyCP 架构与运行时决策流程}
+    \caption{PD 分离适配 DyCP 的 KV Cache 分片与落位示意}
     \label{fig:dycp-system-architecture}
 \end{figure}
 
