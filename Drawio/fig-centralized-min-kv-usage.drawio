@@ -1,0 +1,112 @@
+<mxfile host="app.diagrams.net" modified="2026-06-15T00:00:00.000Z" agent="Codex" version="24.7.17">
+  <diagram id="centralized-min-kv-usage" name="Centralized Min KV Usage Scheduling">
+    <mxGraphModel dx="1400" dy="820" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1250" pageHeight="500" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="request-panel" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.2;" vertex="1" parent="1">
+          <mxGeometry x="75" y="120" width="245" height="310" as="geometry"/>
+        </mxCell>
+        <mxCell id="request-title" value="Decode Request" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=15;fontFamily=Times New Roman;fontColor=#222222" vertex="1" parent="1">
+          <mxGeometry x="118" y="138" width="160" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="new-request" value="New request&lt;br&gt;seq len / SLO" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.1;fontSize=12;fontFamily=Times New Roman;fontColor=#222222;" vertex="1" parent="1">
+          <mxGeometry x="105" y="185" width="185" height="52" as="geometry"/>
+        </mxCell>
+        <mxCell id="queue" value="waiting queue&lt;br&gt;decode step" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#CFE0EF;strokeColor=#222222;strokeWidth=1.1;fontSize=12;fontFamily=Times New Roman;fontColor=#222222;" vertex="1" parent="1">
+          <mxGeometry x="110" y="270" width="175" height="52" as="geometry"/>
+        </mxCell>
+        <mxCell id="q0" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#CFE8D3;strokeColor=#222222;strokeWidth=1.0;" vertex="1" parent="1">
+          <mxGeometry x="120" y="354" width="28" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="q1" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#CFE0EF;strokeColor=#222222;strokeWidth=1.0;" vertex="1" parent="1">
+          <mxGeometry x="158" y="354" width="28" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="q2" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#E9C9E7;strokeColor=#222222;strokeWidth=1.0;" vertex="1" parent="1">
+          <mxGeometry x="196" y="354" width="28" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="q3" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#EBD49A;strokeColor=#222222;strokeWidth=1.0;" vertex="1" parent="1">
+          <mxGeometry x="234" y="354" width="28" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="scheduler-panel" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.2;" vertex="1" parent="1">
+          <mxGeometry x="365" y="120" width="285" height="310" as="geometry"/>
+        </mxCell>
+        <mxCell id="scheduler-title" value="Centralized Scheduler" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=15;fontFamily=Times New Roman;fontColor=#222222" vertex="1" parent="1">
+          <mxGeometry x="425" y="138" width="170" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="central-scheduler" value="CentralizedScheduler" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#EBD49A;strokeColor=#222222;strokeWidth=1.1;fontSize=13;fontFamily=Times New Roman;fontColor=#222222;" vertex="1" parent="1">
+          <mxGeometry x="405" y="172" width="205" height="46" as="geometry"/>
+        </mxCell>
+        <mxCell id="usage-inputs" value="KV usage snapshot&lt;br&gt;DP0 76%   DP1 42%&lt;br&gt;DP2 18%   DP3 63%" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.1;fontSize=12;fontFamily=Times New Roman;fontColor=#222222;" vertex="1" parent="1">
+          <mxGeometry x="395" y="236" width="225" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="min-policy" value="DPLB policy&lt;br&gt;r* = argmin_r KV_usage(r)" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#CFE0EF;strokeColor=#222222;strokeWidth=1.1;fontSize=12;fontFamily=Times New Roman;fontColor=#222222;" vertex="1" parent="1">
+          <mxGeometry x="395" y="314" width="225" height="56" as="geometry"/>
+        </mxCell>
+        <mxCell id="selected-target" value="target DP2&lt;br&gt;lowest KV usage" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#CFE8D3;strokeColor=#222222;strokeWidth=1.1;fontSize=12;fontFamily=Times New Roman;fontColor=#222222;" vertex="1" parent="1">
+          <mxGeometry x="405" y="384" width="205" height="42" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="decode-panel" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.2;" vertex="1" parent="1">
+          <mxGeometry x="710" y="120" width="470" height="310" as="geometry"/>
+        </mxCell>
+        <mxCell id="decode-title" value="Decode DP Replica Pool" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=15;fontFamily=Times New Roman;fontColor=#222222" vertex="1" parent="1">
+          <mxGeometry x="815" y="138" width="260" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="pool-frame" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B7280;dashed=1;dashPattern=2 2;strokeWidth=1.1;fontSize=11;fontFamily=Times New Roman;fontColor=#6B7280;verticalAlign=top;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="740" y="170" width="410" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="dp0" value="DP0&lt;br&gt;KV usage: 76%" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.1;fontSize=11;fontFamily=Times New Roman;fontColor=#222222;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="760" y="205" width="170" height="72" as="geometry"/>
+        </mxCell>
+        <mxCell id="dp1" value="DP1&lt;br&gt;KV usage: 42%" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.1;fontSize=11;fontFamily=Times New Roman;fontColor=#222222;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="960" y="205" width="170" height="72" as="geometry"/>
+        </mxCell>
+        <mxCell id="dp2" value="DP2&lt;br&gt;KV usage: 18%" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F7FBF8;strokeColor=#222222;strokeWidth=1.8;fontSize=11;fontFamily=Times New Roman;fontColor=#222222;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="760" y="305" width="170" height="72" as="geometry"/>
+        </mxCell>
+        <mxCell id="dp3" value="DP3&lt;br&gt;KV usage: 63%" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.1;fontSize=11;fontFamily=Times New Roman;fontColor=#222222;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="960" y="305" width="170" height="72" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="bar0-bg" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.0;" vertex="1" parent="1"><mxGeometry x="785" y="252" width="120" height="10" as="geometry"/></mxCell>
+        <mxCell id="bar0-fill" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#E9C9E7;strokeColor=none;" vertex="1" parent="1"><mxGeometry x="785" y="252" width="91" height="10" as="geometry"/></mxCell>
+        <mxCell id="bar1-bg" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.0;" vertex="1" parent="1"><mxGeometry x="985" y="252" width="120" height="10" as="geometry"/></mxCell>
+        <mxCell id="bar1-fill" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#CFE0EF;strokeColor=none;" vertex="1" parent="1"><mxGeometry x="985" y="252" width="50" height="10" as="geometry"/></mxCell>
+        <mxCell id="bar2-bg" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.0;" vertex="1" parent="1"><mxGeometry x="785" y="352" width="120" height="10" as="geometry"/></mxCell>
+        <mxCell id="bar2-fill" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#CFE8D3;strokeColor=none;" vertex="1" parent="1"><mxGeometry x="785" y="352" width="22" height="10" as="geometry"/></mxCell>
+        <mxCell id="bar3-bg" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#222222;strokeWidth=1.0;" vertex="1" parent="1"><mxGeometry x="985" y="352" width="120" height="10" as="geometry"/></mxCell>
+        <mxCell id="bar3-fill" value="" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#EBD49A;strokeColor=none;" vertex="1" parent="1"><mxGeometry x="985" y="352" width="76" height="10" as="geometry"/></mxCell>
+        <mxCell id="selected-badge" value="selected" style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#CFE8D3;strokeColor=#222222;strokeWidth=1.0;fontSize=10;fontFamily=Times New Roman;fontColor=#222222;" vertex="1" parent="1">
+          <mxGeometry x="850" y="286" width="70" height="20" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e-request-scheduler" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=1.1;strokeColor=#222222;fontSize=10;fontFamily=Times New Roman;fontColor=#6B7280;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="290" y="211" as="sourcePoint"/>
+            <mxPoint x="405" y="195" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-scheduler-inputs" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#222222;strokeWidth=1.1;" edge="1" parent="1" source="central-scheduler" target="usage-inputs"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-inputs-policy" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#222222;strokeWidth=1.1;" edge="1" parent="1" source="usage-inputs" target="min-policy"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-policy-target" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#222222;strokeWidth=1.1;" edge="1" parent="1" source="min-policy" target="selected-target"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-target-dp2" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=1.2;strokeColor=#222222;fontSize=10;fontFamily=Times New Roman;fontColor=#6B7280;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="610" y="405" as="sourcePoint"/>
+            <mxPoint x="760" y="341" as="targetPoint"/>
+            <Array as="points">
+              <mxPoint x="675" y="405"/>
+              <mxPoint x="675" y="341"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-usage-feedback" value="" style="endArrow=block;html=1;rounded=0;dashed=1;dashPattern=2 2;strokeWidth=1.1;strokeColor=#6B7280;fontSize=10;fontFamily=Times New Roman;fontColor=#6B7280;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="740" y="248" as="sourcePoint"/>
+            <mxPoint x="620" y="266" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
