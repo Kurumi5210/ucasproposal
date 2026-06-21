@@ -21,7 +21,7 @@
 %---------------------------------------------------------------------------%
 %->> Document settings
 %---------------------------------------------------------------------------%
-\usepackage[numbers,xhf,tikz,table]{Style/artratex}% document settings
+\usepackage[numbers,tikz,table]{Style/artratex}% document settings
 %- usage: \usepackage[option1,option2,...,optionN]{artratex}
 %- Multiple optional arguments:
 %- [bibtex|biber]% set bibliography processor and package
@@ -45,6 +45,7 @@
 %->> Font configuration
 %---------------------------------------------------------------------------%
 %- English text font: Times New Roman (Windows TrueType)
+\setlength{\headheight}{14.5pt}% accommodate template header text
 \setmainfont{Times New Roman}[Ligatures=TeX]%
 %- CJK serif font: SimSun (宋体) for body text
 \setCJKmainfont{SimSun}[

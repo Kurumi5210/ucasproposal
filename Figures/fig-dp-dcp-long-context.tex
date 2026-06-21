@@ -82,9 +82,6 @@
 \draw[axis,line width=0.9pt] (5.10,7.44) -- (5.58,7.44);
 \fill[benchAxis] (5.34,7.44) circle[radius=1.08pt];
 \node[legend,anchor=west] at (5.72,7.44) {TPOT};
-\draw[axis,line width=0.9pt,dashed] (6.95,7.44) -- (7.43,7.44);
-\draw[benchAxis,fill=white,line width=0.55pt] (7.19,7.44) circle[radius=1.08pt];
-\node[legend,anchor=west] at (7.57,7.44) {ITL};
 
 \drawaxes{\xA}{\ytop}{4K baseline}
 \drawaxes{\xB}{\ytop}{1\% 128K mix}
@@ -94,53 +91,33 @@
 
 % 4K
 \linefive{\xA}{\ytop}{dp}{6.58}{6.93}{6.98}{7.47}{8.55}
-\linefive{\xA}{\ytop}{dp,dashed}{6.63}{7.08}{7.15}{7.87}{9.83}
 \linefive{\xA}{\ytop}{dcp}{7.15}{8.10}{9.00}{11.51}{22.88}
-\linefive{\xA}{\ytop}{dcp,dashed}{7.25}{8.28}{9.23}{11.97}{23.36}
 \solidmarks{\xA}{\ytop}{benchDP}{0/6.58,1/6.93,2/6.98,3/7.47,4/8.55}
-\openmarks{\xA}{\ytop}{benchDP}{0/6.63,1/7.08,2/7.15,3/7.87,4/9.83}
 \solidmarks{\xA}{\ytop}{benchDCP}{0/7.15,1/8.10,2/9.00,3/11.51,4/22.88}
-\openmarks{\xA}{\ytop}{benchDCP}{0/7.25,1/8.28,2/9.23,3/11.97,4/23.36}
 
 % 128K
 \linefive{\xB}{\ytop}{dp}{7.87}{8.73}{9.38}{10.13}{11.45}
-\linefive{\xB}{\ytop}{dp,dashed}{8.98}{9.35}{9.70}{10.61}{13.04}
 \linefive{\xB}{\ytop}{dcp}{7.55}{8.33}{9.68}{12.53}{27.15}
-\linefive{\xB}{\ytop}{dcp,dashed}{7.64}{8.45}{9.91}{12.94}{27.26}
 \solidmarks{\xB}{\ytop}{benchDP}{0/7.87,1/8.73,2/9.38,3/10.13,4/11.45}
-\openmarks{\xB}{\ytop}{benchDP}{0/8.98,1/9.35,2/9.70,3/10.61,4/13.04}
 \solidmarks{\xB}{\ytop}{benchDCP}{0/7.55,1/8.33,2/9.68,3/12.53,4/27.15}
-\openmarks{\xB}{\ytop}{benchDCP}{0/7.64,1/8.45,2/9.91,3/12.94,4/27.26}
 
 % 256K
 \linefive{\xC}{\ytop}{dp}{8.97}{10.67}{11.94}{12.79}{15.72}
-\linefive{\xC}{\ytop}{dp,dashed}{11.34}{11.98}{12.36}{13.42}{17.87}
 \linefive{\xC}{\ytop}{dcp}{7.56}{8.45}{9.44}{12.12}{29.33}
-\linefive{\xC}{\ytop}{dcp,dashed}{7.69}{8.73}{9.70}{12.66}{29.89}
 \solidmarks{\xC}{\ytop}{benchDP}{0/8.97,1/10.67,2/11.94,3/12.79,4/15.72}
-\openmarks{\xC}{\ytop}{benchDP}{0/11.34,1/11.98,2/12.36,3/13.42,4/17.87}
 \solidmarks{\xC}{\ytop}{benchDCP}{0/7.56,1/8.45,2/9.44,3/12.12,4/29.33}
-\openmarks{\xC}{\ytop}{benchDCP}{0/7.69,1/8.73,2/9.70,3/12.66,4/29.89}
 
 % 512K
 \linefive{\xD}{\ybottom}{dp}{13.39}{16.64}{18.24}{18.90}{22.20}
-\linefive{\xD}{\ybottom}{dp,dashed}{17.44}{17.75}{18.44}{19.96}{27.00}
 \linefive{\xD}{\ybottom}{dcp}{8.01}{9.15}{10.18}{13.40}{39.70}
-\linefive{\xD}{\ybottom}{dcp,dashed}{8.32}{9.46}{10.53}{14.04}{39.50}
 \solidmarks{\xD}{\ybottom}{benchDP}{0/13.39,1/16.64,2/18.24,3/18.90,4/22.20}
-\openmarks{\xD}{\ybottom}{benchDP}{0/17.44,1/17.75,2/18.44,3/19.96,4/27.00}
 \solidmarks{\xD}{\ybottom}{benchDCP}{0/8.01,1/9.15,2/10.18,3/13.40,4/39.70}
-\openmarks{\xD}{\ybottom}{benchDCP}{0/8.32,1/9.46,2/10.53,3/14.04,4/39.50}
 
 % 1M
 \linefive{\xE}{\ybottom}{dp}{24.47}{28.09}{28.85}{30.25}{36.69}
-\linefive{\xE}{\ybottom}{dp,dashed}{27.72}{28.30}{29.27}{31.83}{53.80}
 \linefive{\xE}{\ybottom}{dcp}{9.19}{10.36}{11.96}{16.76}{60.89}
-\linefive{\xE}{\ybottom}{dcp,dashed}{10.11}{10.67}{12.25}{17.43}{61.30}
 \solidmarks{\xE}{\ybottom}{benchDP}{0/24.47,1/28.09,2/28.85,3/30.25,4/36.69}
-\openmarks{\xE}{\ybottom}{benchDP}{0/27.72,1/28.30,2/29.27,3/31.83,4/53.80}
 \solidmarks{\xE}{\ybottom}{benchDCP}{0/9.19,1/10.36,2/11.96,3/16.76,4/60.89}
-\openmarks{\xE}{\ybottom}{benchDCP}{0/10.11,1/10.67,2/12.25,3/17.43,4/61.30}
 
 \end{tikzpicture}
 %---------------------------------------------------------------------------%
